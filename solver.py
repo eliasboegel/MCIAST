@@ -2,7 +2,7 @@ class Solver:
     # Gas constant
     R = ...
 
-    def __init__(self, temp, h_t, p_in, c_len, void_frac, disp_coeffs, kl, peclet_coeffs, p_he, u_in=1):
+    def __init__(self, temp, h_t, p_in, c_len, void_frac, disp_coeffs, kl, peclet_coeffs, p_he, ro_p, u_in=1):
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions.
@@ -15,6 +15,7 @@ class Solver:
         :param kl: Array containing effective mass transport coefficient of every component
         :param peclet_coeffs: Peclet numbers for each component.
         :param p_he: Helium pressure.
+        :param ro_p: Density of the adsorbent
         :param u_in: Interstitial velocity at the inlet.
         """
         self.temp = temp
@@ -25,8 +26,11 @@ class Solver:
         self.disp_coeffs = disp_coeffs
         self.peclet_coeffs = peclet_coeffs
         self.kl = kl
+        self.ro_p = ro_p
         self.u_in = u_in
         self.p_he = p_he
+        self.n_grid_points = ...
+        self.n_components = ...
         self.p_total = ...
         self.g_matrix = ...
         self.l_matrix = ...
@@ -52,7 +56,7 @@ class Solver:
         """
         ...
 
-    def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads, ro_p):
+    def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
         """
         Calculates the time derivatives of partial pressures of each component for each grid point.
         Each row represents one grid point. Each column represents one component.
@@ -65,19 +69,20 @@ class Solver:
         """
         ...
 
-    def calculate_next_pressure(self, p_old, dp_dt):
+    def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
         Steps in time to calculate the partial pressures of each component in the next point of time.
-        :param p_old: Matrix containing old partial pressures.
+        :param p_partial_old: Matrix containing old partial pressures.
         :param dp_dt: Matrix containing time derivatives of partial pressures of each component at each grid point.
         :return: Matrix containing new partial pressures.
         """
         ...
 
-    def verify_pressures(self, p):
+    def verify_pressures(self, p_partial):
         """
         Verify if all partial pressures sum up to 1.
-        :param p: Matrix containing partial pressures at each grid point
+        :param p_partial
+        : Matrix containing partial pressures at each grid point
         :return: True if the pressures sum up to 1, false otherwise
         """
         ...
@@ -100,14 +105,14 @@ class Solver:
         """
         ...
 
-    def check_equilibrium(self, p_old, p_new):
+    def check_equilibrium(self, p_partial_old, p_partial_new):
         """
         Checks if the components have reached equilibrium and the adsorption process is finished.
-        :param p_old: Matrix containing old partial pressures of all components at every point.
-        :param p_new: Matrix containing new partial pressures of all components at every point.
+        :param p_partial_old: Matrix containing old partial pressures of all components at every point.
+        :param p_partial_new: Matrix containing new partial pressures of all components at every point.
         :return: True if the equilibrium is reached, false otherwise.
         """
-        if p_new is None:
+        if p_partial_new is None:
             return False
         ...
 
@@ -116,11 +121,24 @@ class Solver:
         q_ads = ...
         p_partial_old = None
         p_partial_new = self.p_in
-        v = ...
         dpt_dxi = self.calcualte_dpt_dxi
         while not self.check_equilibrium(p_partial_old, p_partial_new):
-            v = self.calculate_velocity(p_partial_new, dpt_dxi, q_eq, q_ads)
-            # dp_dt = self.calculate_dp_dt(v, p_partial_new )
-            # WORK IN PROGRESS
 
-        ...
+            # Calculate new velocity
+            v = self.calculate_velocity(p_partial_new, dpt_dxi, q_eq, q_ads)
+
+            # Calculate new partial pressures
+            dp_dt = self.calculate_dp_dt(v, p_partial_new, q_eq, q_ads)
+            p_partial_old = p_partial_new
+            p_partial_new = self.calculate_next_pressure(p_partial_old, dp_dt)
+            if not self.verify_pressures(p_partial_new):
+                print("The sum of partial pressures is not equal to 1!")
+
+            # Add something for plotting here
+
+            # Calculate new loadings
+            q_eq = ...  # Call the IAST
+            dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
+            q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
+
+        return p_partial_new
