@@ -38,16 +38,19 @@ class SysParams:
         self.rho_p = rho_p
         self.p_he = p_he
 
+        # Partial pressures at the inlet
+        self.p_partial_in = y_in * p_in
         # Dimensionless mass transfer coefficients
         self.kl = kl * c_len / u_in
         # Dimensionless dispersion coefficients
         self.disp = disp / (c_len * u_in)
         # Dimensionless length of the column (always 1)
         self.c_len = 1
+        self.dz = c_len / n_points
         # Dimensionless gradient of the total pressure
         self.dp_dz = (p_out - p_in) / self.c_len
         # Dimensionless inlet velocity (always 1)
-        self.u_in = 1
+        self.v_in = 1
 
         # The number of components assesses based of the length of y_in array
         self.n_components = len(y_in)
@@ -68,10 +71,23 @@ class Solver:
         self.params = sys_params
 
         # Those matrices will be used in the solver, their internal strucutre is fully explained in the report
-        self.g_matrix = ...
-        self.l_matrix = ...
-        self.d_matrix = ...
-        self.b_vector = ...
+        self.g_matrix = np.diag(-1, -1) + np.diag(1, 1)
+        self.g_matrix[self.g_matrix.shape(0) - 1][self.g_matrix.shape(1) - 3] = 1
+        self.g_matrix[self.g_matrix.shape(0) - 1][self.g_matrix.shape(1) - 2] = -4
+        self.g_matrix[self.g_matrix.shape(0) - 1][self.g_matrix.shape(1) - 1] = 3
+        self.g_matrix = (1 / self.params.dz) ** 2 * self.g_matrix
+
+        self.l_matrix = np.diag(1, -1) + np.diag(1, 1) + np.diag(-2, 0)
+        self.l_matrix[self.l_matrix.shape(0) - 1][self.l_matrix.shape(1) - 2] = 2
+        self.l_matrix[self.l_matrix.shape(0) - 1][self.l_matrix.shape(1) - 1] = -2
+
+        self.d_matrix = np.zeros((self.params.n_grid_points, self.params.n_components))
+        first_row = (self.params.p_partial_in / self.R * self.params.temp) * (
+                (self.params.v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
+        self.d_matrix[0] = first_row  # idk if that works
+
+        self.b_vector = np.zeros_like(self.params.n_grid_points)
+        self.b_vector[0] = -2 * self.params.v_in / self.params.dz
 
     def calculate_velocity(self, p_partial, q_eq, q_ads):
         """
