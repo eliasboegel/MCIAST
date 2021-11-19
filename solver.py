@@ -13,7 +13,7 @@ class SysParams:
         :param n_points: Number of grid points.
         :param p_in: Total pressure at the inlet.
         :param p_out: Total pressure at the outlet.
-        :param temp: Temperature of the system.
+        :param temp: Temperature of the system in Kelvins.
         :param c_len: Column length.
         :param u_in: Speed at the inlet.
         :param void_frac: Void fraction (epsilon).
@@ -30,23 +30,33 @@ class SysParams:
         # Initializing non-dimensionless parameters
         self.p_in = p_in
         self.p_out = p_out
-        self.y_in = y_in
+
         self.n_points = n_points
+
+        if np.sum(y_in) != 1:
+            raise Exception("Sum of mole fractions is not equal to 1")
+        self.y_in = y_in
+
+        if temp < 0:
+            raise Exception("Temperature cannot be below 0")
         self.temp = temp
+
+        if not 0 <= void_frac <= 1:
+            raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
-        self.kl = kl
+
         self.rho_p = rho_p
         self.p_he = p_he
 
         # Partial pressures at the inlet
-        self.p_partial_in = y_in * p_in
+        self.p_partial_in = p_in * y_in
         # Dimensionless mass transfer coefficients
         self.kl = kl * c_len / u_in
         # Dimensionless dispersion coefficients
         self.disp = disp / (c_len * u_in)
         # Dimensionless length of the column (always 1)
         self.c_len = 1
-        self.dz = c_len / n_points
+        self.dz = self.c_len / (n_points-1)
         # Dimensionless gradient of the total pressure
         self.dp_dz = (p_out - p_in) / self.c_len
         # Dimensionless inlet velocity (always 1)
@@ -56,7 +66,7 @@ class SysParams:
         self.n_components = len(y_in)
 
         # p_total is a sum of all partial pressures for each grid point
-        self.p_total = np.sum(p_in, axis=1)
+        self.p_total = np.linspace(p_in, p_out, num=n_points, endpoint=True)
 
 
 class Solver:
