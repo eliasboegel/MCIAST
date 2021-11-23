@@ -2,7 +2,8 @@ import numpy as np
 
 
 class SysParams:
-    def __init__(self, t_end, dt, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, p_he, rho_p):
+    def __init__(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, p_he, rho_p, t_end=40,
+                 dt=0.001):
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions. The variables are turned into the dimensionless equivalents.
@@ -51,9 +52,9 @@ class SysParams:
         # Partial pressures at the inlet
         self.p_partial_in = p_in * y_in
         # Dimensionless mass transfer coefficients
-        self.kl = kl * c_len / u_in
+        self.kl = np.asarray(kl) * c_len / u_in
         # Dimensionless dispersion coefficients
-        self.disp = disp / (c_len * u_in)
+        self.disp = np.asarray(disp) / (c_len * u_in)
         # Dimensionless length of the column (always 1)
         self.c_len = 1
         self.dz = self.c_len / (n_points - 1)
@@ -69,6 +70,17 @@ class SysParams:
         self.p_total = np.linspace(p_in, p_out, num=n_points, endpoint=True)
 
 
+def verify_pressures(p_partial):
+    """
+    Verify if all partial pressures sum up to 1.
+    :param p_partial
+    : Matrix containing partial pressures at each grid point
+    :return: True if the pressures sum up to 1, false otherwise
+    """
+    p_summed = np.sum(p_partial, axis=1)
+    return np.allclose(p_summed, 1, 1.e-3, 0)
+
+
 class Solver:
     # Gas constant
     R = 8.314
@@ -82,16 +94,16 @@ class Solver:
 
         # Those matrices will be used in the solver, their internal strucutre is fully explained in the report
         # Check if those sizes are correct (consult Jan)
-        self.g_matrix = np.diag(np.full(self.params.n_points-1, -1), -1) + np.diag(
-            np.full(self.params.n_points-1, 1), 1)
+        self.g_matrix = np.diag(np.full(self.params.n_points - 1, -1), -1) + np.diag(
+            np.full(self.params.n_points - 1, 1), 1)
         print(self.g_matrix)
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 3] = 1
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 2] = -4
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 1] = 3
         self.g_matrix = (1 / self.params.dz) ** 2 * self.g_matrix
 
-        self.l_matrix = np.diag(np.full(self.params.n_points-1, 1), -1) + np.diag(
-            np.full(self.params.n_points-1, 1), 1) + np.diag(np.full(self.params.n_points, -1), 0)
+        self.l_matrix = np.diag(np.full(self.params.n_points - 1, 1), -1) + np.diag(
+            np.full(self.params.n_points - 1, 1), 1) + np.diag(np.full(self.params.n_points, -1), 0)
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 2] = 2
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
 
@@ -128,7 +140,11 @@ class Solver:
         :param ro_p: Density of the adsorbent (?)
         :return: Matrix containing the time derivatives of partial pressures of each component at each grid point.
         """
-        ...
+        m_matrix = np.multiply(velocities, p_partial)
+        dp_dt = -np.dot(self.g_matrix, m_matrix) + self.params.disp * np.dot(self.l_matrix, p_partial) - \
+            self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
+            np.transpose(self.params.k_l) * (q_eq - q_ads) + self.d_matrix
+        return dp_dt
 
     def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
@@ -137,16 +153,7 @@ class Solver:
         :param dp_dt: Matrix containing time derivatives of partial pressures of each component at each grid point.
         :return: Matrix containing new partial pressures.
         """
-        ...
-
-    def verify_pressures(self, p_partial):
-        """
-        Verify if all partial pressures sum up to 1.
-        :param p_partial
-        : Matrix containing partial pressures at each grid point
-        :return: True if the pressures sum up to 1, false otherwise
-        """
-        ...
+        return p_partial_old + self.params.dt * dp_dt
 
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
@@ -155,7 +162,8 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        ...
+        dq_ads_dt = np.transpose(self.params.k_l) *(q_eq - q_ads)
+        return dq_ads_dt
 
     def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
         """
@@ -164,7 +172,7 @@ class Solver:
         :param dq_ads_dt: Matrix containing time derivatives of average loadings of each component at each grid point.
         :return: Matrix containing new average loadings.
         """
-        ...
+        return q_ads_old + self.params.dt * dq_ads_dt
 
     def check_equilibrium(self, p_partial_old, p_partial_new):
         """
@@ -175,7 +183,7 @@ class Solver:
         """
         if p_partial_new is None:
             return False
-        ...
+        return np.allclose(p_partial_old, p_partial_new, 1.e-5)
 
     def solve(self):
         q_eq = np.zeros((self.params.n_grid_points, self.params.n_components))
@@ -193,7 +201,7 @@ class Solver:
             dp_dt = self.calculate_dp_dt(v, p_partial_new, q_eq, q_ads)
             p_partial_old = p_partial_new
             p_partial_new = self.calculate_next_pressure(p_partial_old, dp_dt)
-            if not self.verify_pressures(p_partial_new):
+            if not verify_pressures(p_partial_new):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
