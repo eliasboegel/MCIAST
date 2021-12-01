@@ -82,7 +82,7 @@ class Solver:
         """
         self.params = sys_params
 
-        # Those matrices will be used in the solver, their internal strucutre is fully explained in the report
+        # Those matrices will be used in the solver, their internal structure is fully explained in the report
         # Check if those sizes are correct (consult Jan)
         self.g_matrix = np.diag(np.full(self.params.n_points - 1, -1), -1) + np.diag(
             np.full(self.params.n_points - 1, 1), 1)
@@ -184,7 +184,7 @@ class Solver:
         """
         if p_partial_new is None:
             return False
-        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0]], 1.e-5)
+        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0]-1], 1.e-5)
 
     def solve(self):
         q_eq = np.zeros((self.params.n_grid_points, self.params.n_components))
@@ -211,4 +211,4 @@ class Solver:
             q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             t += self.params.dt
 
-        return p_partial_new
+        return p_partial
