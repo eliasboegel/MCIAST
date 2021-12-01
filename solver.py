@@ -70,16 +70,6 @@ class SysParams:
         self.p_total = np.linspace(p_in, p_out, num=n_points, endpoint=True)
 
 
-def verify_pressures(p_partial):
-    """
-    Verify if all partial pressures sum up to 1.
-    :param p_partial
-    : Matrix containing partial pressures at each grid point
-    :return: True if the pressures sum up to 1, false otherwise
-    """
-    p_summed = np.sum(p_partial, axis=1)
-    return np.allclose(p_summed, 1, 1.e-3, 0)
-
 
 class Solver:
     # Gas constant
@@ -143,8 +133,18 @@ class Solver:
         m_matrix = np.multiply(velocities, p_partial)
         dp_dt = -np.dot(self.g_matrix, m_matrix) + self.params.disp * np.dot(self.l_matrix, p_partial) - \
             self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
-            np.transpose(self.params.k_l) * (q_eq - q_ads) + self.d_matrix
+            np.transpose(self.params.kl) * (q_eq - q_ads) + self.d_matrix
         return dp_dt
+
+    def verify_pressures(self, p_partial):
+        """
+        Verify if all partial pressures sum up to 1.
+        :param p_partial
+        : Matrix containing partial pressures at each grid point
+        :return: True if the pressures sum up to 1, false otherwise
+        """
+        p_summed = np.sum(p_partial, axis=1)
+        return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
 
     def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
@@ -162,7 +162,7 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        dq_ads_dt = np.transpose(self.params.k_l) *(q_eq - q_ads)
+        dq_ads_dt = np.transpose(self.params.k_l) * (q_eq - q_ads)
         return dq_ads_dt
 
     def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
@@ -174,34 +174,33 @@ class Solver:
         """
         return q_ads_old + self.params.dt * dq_ads_dt
 
-    def check_equilibrium(self, p_partial_old, p_partial_new):
+    def check_equilibrium(self, p_partial_new):
         """
-        Checks if the components have reached equilibrium and the adsorption process is finished.
+        Checks if the components have reached equilibrium and the adsorption process is finished by comparing
+        partial pressures at the inlet and the outlet.
         :param p_partial_old: Matrix containing old partial pressures of all components at every point.
         :param p_partial_new: Matrix containing new partial pressures of all components at every point.
         :return: True if the equilibrium is reached, false otherwise.
         """
         if p_partial_new is None:
             return False
-        return np.allclose(p_partial_old, p_partial_new, 1.e-5)
+        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0]], 1.e-5)
 
     def solve(self):
         q_eq = np.zeros((self.params.n_grid_points, self.params.n_components))
         q_ads = np.zeros((self.params.n_grid_points, self.params.n_components))
-        p_partial_old = None
-        p_partial_new = self.params.p_in
+        p_partial = np.vstack(self.params.p_partial_in, np.zeros((self.params.n_points-1, self.params.n_components)))
         t = 0
         # dpt_dxi = self.calcualte_dpt_dxi
-        while (not self.check_equilibrium(p_partial_old, p_partial_new)) or t < self.params.t_end:
+        while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
 
             # Calculate new velocity
-            v = self.calculate_velocity(p_partial_new, q_eq, q_ads)
+            v = self.calculate_velocity(p_partial, q_eq, q_ads)
 
             # Calculate new partial pressures
-            dp_dt = self.calculate_dp_dt(v, p_partial_new, q_eq, q_ads)
-            p_partial_old = p_partial_new
-            p_partial_new = self.calculate_next_pressure(p_partial_old, dp_dt)
-            if not verify_pressures(p_partial_new):
+            dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
+            p_partial_new = self.calculate_next_pressure(p_partial, dp_dt)
+            if not self.verify_pressures(p_partial_new):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
