@@ -1,6 +1,4 @@
 import numpy as np
-import scipy.sparse as sp
-import scipy.optimize as opt
 
 
 class SysParams:
@@ -224,63 +222,3 @@ class Solver:
             t += self.params.dt
 
         return p_partial
-
-    def linearized_system(self, peclet_magnitude):
-        # Calculate LHS matrix
-        lhs = self.g_matrix + self.params.dp_dz * (sp.eye(self.params.n_points).T / self.params.p_total).T
-        # Calculate RHS matrix
-        rhs = self.l_matrix.dot(np.ones(self.params.n_points) / peclet_magnitude)
-        # Solve for nu approximation
-        nu = sp.linalg.spsolve(lhs, rhs)
-        # Create linearized system matrix
-        a_matrix = -(self.g_matrix.dot(nu) - self.l_matrix / peclet_magnitude)
-        # Calculate linearized system matrix stiffness
-        lambda_max = sp.linalg.eigs(A=a_matrix, k=1, which="LM")[0]
-        lambda_min = sp.linalg.eigs(A=a_matrix, k=1, which="SM")[0]
-        a_stiffness = np.absolute(lambda_max)/np.absolute(lambda_min)
-        return a_matrix, a_stiffness, lambda_max
-
-    def stiffness_estimate(self):
-        for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
-                                                  ("smallest Peclet number", 1 / np.max(self.params.disp)),
-                                                  ("average Peclet number", 1 / np.mean(self.params.disp))):
-
-            print(f"Stiffness of linearized system matrix for {peclet_number} is "
-                  f"{self.linearized_system(peclet_magnitude)[1]}")
-
-    def stability_analysis(self):
-
-        def rk4_stability_equation(u):
-            return 1 + u + u ** 2 / 2 + u ** 3 / 6 + u ** 4 / 24
-
-        def fe_stability_equation(u):
-            return 1 / (1 - u)
-
-        for (f_name, f) in (("RK4", rk4_stability_equation), ("FE", fe_stability_equation)):
-            for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
-                                                      ("smallest Peclet number", 1 / np.max(self.params.disp)),
-                                                      ("average Peclet number", 1 / np.mean(self.params.disp))):
-
-                def stability_condition(dt):
-                    u = self.linearized_system(peclet_magnitude)[2] * dt
-                    return np.absolute(f(u)) - 1
-
-                dt = opt.fsolve(func=stability_condition, x0=np.array(0.0), maxfev=1000)
-            print(f"Timestep for stability for {f_name}, {peclet_number} is {dt} seconds")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
