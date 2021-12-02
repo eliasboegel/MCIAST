@@ -70,7 +70,6 @@ class SysParams:
         self.p_total = np.linspace(p_in, p_out, num=n_points, endpoint=True)
 
 
-
 class Solver:
     # Gas constant
     R = 8.314
@@ -105,7 +104,7 @@ class Solver:
 
         self.b_vector = np.zeros(self.params.n_points)
         print(self.b_vector)
-        self.b_vector[0] = -2 * self.params.v_in / self.params.dz
+        self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
     def calculate_velocity(self, p_partial, q_eq, q_ads):
         """
@@ -137,13 +136,13 @@ class Solver:
         m_matrix = np.multiply(velocities, p_partial)
         print(m_matrix)
         dp_dt = -np.dot(self.g_matrix, m_matrix) + self.params.disp * np.dot(self.l_matrix, p_partial) - \
-            self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
-            self.params.kl * (q_eq - q_ads) + self.d_matrix
+                self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p * \
+                self.params.kl * (q_eq - q_ads) + self.d_matrix
         print("start")
         print(-np.dot(self.g_matrix, m_matrix))
         print(self.params.disp * np.dot(self.l_matrix, p_partial))
-        print(self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
-            self.params.kl * (q_eq - q_ads))
+        print(self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p * \
+              self.params.kl * (q_eq - q_ads))
         print(self.d_matrix)
         return dp_dt
 
@@ -195,12 +194,12 @@ class Solver:
         """
         if p_partial_new is None:
             return False
-        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0]-1], 1.e-5)
+        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0] - 1], 1.e-5)
 
     def solve(self):
         q_eq = np.zeros((self.params.n_grid_points, self.params.n_components))
         q_ads = np.zeros((self.params.n_grid_points, self.params.n_components))
-        p_partial = np.vstack(self.params.p_partial_in, np.zeros((self.params.n_points-1, self.params.n_components)))
+        p_partial = np.vstack(self.params.p_partial_in, np.zeros((self.params.n_points - 1, self.params.n_components)))
         t = 0
         # dpt_dxi = self.calcualte_dpt_dxi
         while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:

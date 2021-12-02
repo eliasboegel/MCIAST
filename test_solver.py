@@ -43,19 +43,16 @@ class TestSolver(unittest.TestCase):
         print("Matrix L: ", solver.l_matrix)
         print("Matrix D: ", solver.d_matrix)
         print("Vector B: ", solver.b_vector)
-        self.assertEqual(solver.g_matrix.shape, (n_points, n_points))
         np.testing.assert_allclose(solver.g_matrix, [[0., 4., 0.],
                                                      [-4., 0., 4.],
                                                      [4., -16., 12.]], 1e-5)
-        self.assertEqual(solver.l_matrix.shape, (n_points, n_points))
         np.testing.assert_allclose(solver.l_matrix, [[-8., 4., 0.],
                                                      [4., -8., 4.],
                                                      [0., 8., -8.]], 1e-5)
-        self.assertEqual(solver.d_matrix.shape, (n_points, n_components))
         np.testing.assert_allclose(solver.d_matrix, [[0.00192139, 0.00768556],
                                                      [0., 0.],
                                                      [0., 0.]], 1e-5)
-        self.assertEqual(solver.b_vector.shape, (n_points,))
+        np.testing.assert_allclose(solver.b_vector, [-1., 0., 0.])
 
     def test_caclulate_dp_dt1(self):
         """
