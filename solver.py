@@ -93,12 +93,13 @@ class Solver:
         self.g_matrix = (1 / self.params.dz) ** 2 * self.g_matrix
 
         self.l_matrix = np.diag(np.full(self.params.n_points - 1, 1), -1) + np.diag(
-            np.full(self.params.n_points - 1, 1), 1) + np.diag(np.full(self.params.n_points, -1), 0)
+            np.full(self.params.n_points - 1, 1), 1) + np.diag(np.full(self.params.n_points, -2), 0)
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 2] = 2
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
+        self.l_matrix = (1 / self.params.dz) ** 2 * self.l_matrix
 
         self.d_matrix = np.zeros((self.params.n_points, self.params.n_components))
-        first_row = (self.params.p_partial_in / self.R * self.params.temp) * (
+        first_row = (self.params.p_partial_in / (self.R * self.params.temp)) * (
                 (self.params.v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row  # idk if that works
 
@@ -130,10 +131,20 @@ class Solver:
         :param ro_p: Density of the adsorbent (?)
         :return: Matrix containing the time derivatives of partial pressures of each component at each grid point.
         """
+        # This can be removed if we assume that a matrix in a correct form is passed
+        velocities = velocities.reshape((-1, 1))
+
         m_matrix = np.multiply(velocities, p_partial)
+        print(m_matrix)
         dp_dt = -np.dot(self.g_matrix, m_matrix) + self.params.disp * np.dot(self.l_matrix, p_partial) - \
             self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
-            np.transpose(self.params.kl) * (q_eq - q_ads) + self.d_matrix
+            self.params.kl * (q_eq - q_ads) + self.d_matrix
+        print("start")
+        print(-np.dot(self.g_matrix, m_matrix))
+        print(self.params.disp * np.dot(self.l_matrix, p_partial))
+        print(self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p *\
+            self.params.kl * (q_eq - q_ads))
+        print(self.d_matrix)
         return dp_dt
 
     def verify_pressures(self, p_partial):
