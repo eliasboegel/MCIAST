@@ -108,9 +108,9 @@ class Solver:
         print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
-    def calculate_velocity(self, p_partial, q_eq, q_ads):
+    def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
-        Calculates velocity at all grid points.
+        Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
         :param p_partial: Matrix containing partial pressures of all the components at every grid point.
         Each row represents different grid point.
         :param p_total: Vector containing total pressures at each grid point.
@@ -121,14 +121,16 @@ class Solver:
         """
 
         ldf = self.params.kl.T * (q_eq - q_ads)
-        lp = 1 / self.R / self.params.temp * self.params.disp * self.l_matrix.dot(p_partial)
-        void_frac_term = (1 - self.params.void_frac) / self.params.void_frac * self.params.rho_p
-        component_sums = np.sum(void_frac_term * ldf - lp, axis=0)
-        p_t = np.sum(p_partial, axis=0)
-        rhs = -1 / p_t * self.R * self.params.temp * component_sums
+        lp = (self.params.disp / (self.R * self.params.temp)) * self.l_matrix.dot(p_partial)
+        void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
+        component_sums = np.sum(void_frac_term * ldf - lp, axis=1)
+        # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
+        # What about helium?
+        p_t = np.sum(p_partial, axis=1)
+        rhs = -(1 / p_t) * self.R * self.params.temp * component_sums - self.b_vector
         lhs = self.g_matrix
-        v = np.linalg.inv(lhs).dot(rhs)
-        return v
+        velocities = np.linalg.solve(lhs, rhs)
+        return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
         """
@@ -213,7 +215,7 @@ class Solver:
         while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
 
             # Calculate new velocity
-            v = self.calculate_velocity(p_partial, q_eq, q_ads)
+            v = self.calculate_velocities(p_partial, q_eq, q_ads)
 
             # Calculate new partial pressures
             dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
