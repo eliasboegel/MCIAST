@@ -117,7 +117,17 @@ class Solver:
 
         :return: Array containing velocities at each grid point.
         """
-        ...
+        
+        ldf = self.kl.T*(q_eq - q_ads)
+        lp = 1/self.R/self.params.temp*self.params.disp*self.l_matrix.dot(p_partial)
+        voidfrac_term = (1-self.params.void_frac)/self.params.void_frac*self.params.rho_p
+        component_sums = np.sum(voidfrac_term * ldf - lp, axis=0)
+        p_t = np.sum(p_partial, axis=0)
+        rhs = -1/p_t*self.R*self.params.temp * component_sums
+        lhs = self.g_matrix
+        v = np.linalg.inv(lhs).dot(rhs)
+        return v
+
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
         """
