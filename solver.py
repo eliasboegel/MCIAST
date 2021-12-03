@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
 
+
 class SysParams:
     def __init__(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, p_he, rho_p, t_end=40,
                  dt=0.001):
@@ -118,17 +119,16 @@ class Solver:
 
         :return: Array containing velocities at each grid point.
         """
-        
-        ldf = self.kl.T*(q_eq - q_ads)
-        lp = 1/self.R/self.params.temp*self.params.disp*self.l_matrix.dot(p_partial)
-        voidfrac_term = (1-self.params.void_frac)/self.params.void_frac*self.params.rho_p
+
+        ldf = self.params.kl.T * (q_eq - q_ads)
+        lp = 1 / self.R / self.params.temp * self.params.disp * self.l_matrix.dot(p_partial)
+        voidfrac_term = (1 - self.params.void_frac) / self.params.void_frac * self.params.rho_p
         component_sums = np.sum(voidfrac_term * ldf - lp, axis=0)
         p_t = np.sum(p_partial, axis=0)
-        rhs = -1/p_t*self.R*self.params.temp * component_sums
+        rhs = -1 / p_t * self.R * self.params.temp * component_sums
         lhs = self.g_matrix
         v = np.linalg.inv(lhs).dot(rhs)
         return v
-
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
         """
@@ -145,16 +145,13 @@ class Solver:
         velocities = velocities.reshape((-1, 1))
 
         m_matrix = np.multiply(velocities, p_partial)
-        print(m_matrix)
-        dp_dt = -np.dot(self.g_matrix, m_matrix) + self.params.disp * np.dot(self.l_matrix, p_partial) - \
-                self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p * \
-                self.params.kl * (q_eq - q_ads) + self.d_matrix
-        print("start")
-        print(-np.dot(self.g_matrix, m_matrix))
-        print(self.params.disp * np.dot(self.l_matrix, p_partial))
-        print(self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p * \
-              self.params.kl * (q_eq - q_ads))
-        print(self.d_matrix)
+
+        advection_term = -np.dot(self.g_matrix, m_matrix)
+        dispersion_term = self.params.disp * np.dot(self.l_matrix, p_partial)
+        adsorption_term = -self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) *\
+                          self.params.rho_p * self.params.kl * (q_eq - q_ads) + self.d_matrix
+
+        dp_dt = advection_term + dispersion_term + adsorption_term
         return dp_dt
 
     def verify_pressures(self, p_partial):
@@ -246,14 +243,13 @@ class Solver:
         # Calculate linearized system matrix stiffness
         lambda_max = sp.linalg.eigs(A=a_matrix, k=1, which="LM")[0]
         lambda_min = sp.linalg.eigs(A=a_matrix, k=1, which="SM")[0]
-        a_stiffness = np.absolute(lambda_max)/np.absolute(lambda_min)
+        a_stiffness = np.absolute(lambda_max) / np.absolute(lambda_min)
         return a_matrix, a_stiffness, lambda_max
 
     def stiffness_estimate(self):
         for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
                                                   ("smallest Peclet number", 1 / np.max(self.params.disp)),
                                                   ("average Peclet number", 1 / np.mean(self.params.disp))):
-
             print(f"Stiffness of linearized system matrix for {peclet_number} is "
                   f"{self.linearized_system(peclet_magnitude)[1]}")
 
@@ -269,7 +265,6 @@ class Solver:
             for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
                                                       ("smallest Peclet number", 1 / np.max(self.params.disp)),
                                                       ("average Peclet number", 1 / np.mean(self.params.disp))):
-
                 def stability_condition(dt):
                     u = self.linearized_system(peclet_magnitude)[2] * dt
                     return np.absolute(f(u)) - 1
