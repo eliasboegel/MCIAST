@@ -122,8 +122,8 @@ class Solver:
 
         ldf = self.params.kl.T * (q_eq - q_ads)
         lp = 1 / self.R / self.params.temp * self.params.disp * self.l_matrix.dot(p_partial)
-        voidfrac_term = (1 - self.params.void_frac) / self.params.void_frac * self.params.rho_p
-        component_sums = np.sum(voidfrac_term * ldf - lp, axis=0)
+        void_frac_term = (1 - self.params.void_frac) / self.params.void_frac * self.params.rho_p
+        component_sums = np.sum(void_frac_term * ldf - lp, axis=0)
         p_t = np.sum(p_partial, axis=0)
         rhs = -1 / p_t * self.R * self.params.temp * component_sums
         lhs = self.g_matrix
@@ -145,11 +145,11 @@ class Solver:
         velocities = velocities.reshape((-1, 1))
 
         m_matrix = np.multiply(velocities, p_partial)
+        void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
 
         advection_term = -np.dot(self.g_matrix, m_matrix)
         dispersion_term = self.params.disp * np.dot(self.l_matrix, p_partial)
-        adsorption_term = -self.params.temp * self.R * ((1 - self.params.void_frac) / self.params.void_frac) *\
-                          self.params.rho_p * self.params.kl * (q_eq - q_ads) + self.d_matrix
+        adsorption_term = -self.params.temp * self.R * void_frac_term * self.params.kl * (q_eq - q_ads) + self.d_matrix
 
         dp_dt = advection_term + dispersion_term + adsorption_term
         return dp_dt
