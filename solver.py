@@ -1,6 +1,9 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
+import pyiast
+import pandas as pd
+import os
 
 
 class SysParams:
@@ -132,8 +135,8 @@ class Solver:
         component_sums = np.sum(void_frac_term * ldf - lp, axis=1)
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
         # What about helium?
-        p_t = np.sum(p_partial, axis=1)
-        rhs = -(1 / p_t) * self.R * self.params.temp * component_sums - self.b_vector
+        # p_t = np.sum(p_partial, axis=1)
+        rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
         lhs = self.g_matrix
         velocities = np.linalg.solve(lhs, rhs)
         return velocities
@@ -158,7 +161,7 @@ class Solver:
         advection_term = -np.dot(self.g_matrix, m_matrix)
         dispersion_term = self.disp_matrix * np.dot(self.l_matrix, p_partial)
         adsorption_term = -self.params.temp * self.R * void_frac_term * self.kl_matrix * (
-                    q_eq - q_ads) + self.d_matrix
+                q_eq - q_ads) + self.d_matrix
 
         dp_dt = advection_term + dispersion_term + adsorption_term
         return dp_dt
@@ -189,7 +192,7 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        dq_ads_dt = np.transpose(self.params.k_l) * (q_eq - q_ads)
+        dq_ads_dt = np.transpose(self.params.kl) * (q_eq - q_ads)
         return dq_ads_dt
 
     def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
@@ -213,29 +216,56 @@ class Solver:
             return False
         return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0] - 1], 1.e-5)
 
+    def load_pyiast(self, partial_pressures):
+
+        dirpath = os.path.abspath(os.path.dirname(__file__))
+
+        df_N2 = pd.read_csv(dirpath + "/n2.csv", skiprows=1)
+        N2_isotherm = pyiast.ModelIsotherm(df_N2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
+                                           model="Langmuir")
+
+        df_CO2 = pd.read_csv(dirpath + "/co2.csv", skiprows=1)
+        CO2_isotherm = pyiast.ModelIsotherm(df_CO2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
+                                            model="Langmuir")
+
+        isotherms = np.array([
+            [N2_isotherm.params['M'] * N2_isotherm.params['K'], N2_isotherm.params['K']],
+            [CO2_isotherm.params['M'] * CO2_isotherm.params['K'], CO2_isotherm.params['K']]
+        ])
+
+        equilibrium_loadings = np.zeros(partial_pressures.shape)
+        for i in range(1):
+            equilibrium_loadings[i] = pyiast.iast(partial_pressures[i], [N2_isotherm, CO2_isotherm], warningoff=True)
+
+        print(f"Equilibrium loadings: {equilibrium_loadings}")
+        return equilibrium_loadings
+
     def solve(self):
-        q_eq = np.zeros((self.params.n_grid_points, self.params.n_components))
-        q_ads = np.zeros((self.params.n_grid_points, self.params.n_components))
-        p_partial = np.vstack(self.params.p_partial_in, np.zeros((self.params.n_points - 1, self.params.n_components)))
+
+        q_eq = np.zeros((self.params.n_points, self.params.n_components))
+        q_ads = np.zeros((self.params.n_points, self.params.n_components))
+        p_partial = np.vstack(
+            (self.params.p_partial_in, np.zeros((self.params.n_points - 1, self.params.n_components))))
         t = 0
-        # dpt_dxi = self.calcualte_dpt_dxi
+
         while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
 
+            # Calculate new loadings
+            q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
+            q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             # Calculate new velocity
             v = self.calculate_velocities(p_partial, q_eq, q_ads)
 
             # Calculate new partial pressures
             dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-            p_partial_new = self.calculate_next_pressure(p_partial, dp_dt)
-            if not self.verify_pressures(p_partial_new):
+            p_partial = self.calculate_next_pressure(p_partial, dp_dt)
+            if not self.verify_pressures(p_partial):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
+            print(p_partial)
 
-            # Calculate new loadings
-            q_eq = ...  # Call the IAST
-            dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-            q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             t += self.params.dt
 
         return p_partial

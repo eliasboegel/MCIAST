@@ -93,3 +93,8 @@ class TestSolver(unittest.TestCase):
         # Some parts need to be calculated with a separate matrix calculator
         np.testing.assert_allclose(velocities, np.asarray([-0.7525, -868.178, -1735.6]), rtol=1e-2)
 
+    def test_solve_function(self):
+        params = SysParams(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, p_out=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], p_he=2, rho_p=500)
+        solver = Solver(params)
+        solver.solve()
