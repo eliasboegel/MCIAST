@@ -108,6 +108,12 @@ class Solver:
         print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
+        # Dimensionless mass transfer coefficients matrix
+        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
+
+        # Dimensionless dispersion coefficients matrix
+        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
+
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
@@ -121,7 +127,7 @@ class Solver:
         """
 
         ldf = self.params.kl.T * (q_eq - q_ads)
-        lp = (self.params.disp / (self.R * self.params.temp)) * self.l_matrix.dot(p_partial)
+        lp = (self.disp_matrix / (self.R * self.params.temp)) * self.l_matrix.dot(p_partial)
         void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
         component_sums = np.sum(void_frac_term * ldf - lp, axis=1)
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
@@ -150,8 +156,9 @@ class Solver:
         void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
 
         advection_term = -np.dot(self.g_matrix, m_matrix)
-        dispersion_term = self.params.disp * np.dot(self.l_matrix, p_partial)
-        adsorption_term = -self.params.temp * self.R * void_frac_term * self.params.kl * (q_eq - q_ads) + self.d_matrix
+        dispersion_term = self.disp_matrix * np.dot(self.l_matrix, p_partial)
+        adsorption_term = -self.params.temp * self.R * void_frac_term * self.kl_matrix * (
+                    q_eq - q_ads) + self.d_matrix
 
         dp_dt = advection_term + dispersion_term + adsorption_term
         return dp_dt
