@@ -205,6 +205,13 @@ class Solver:
         self.params = sys_params
 
         # Those matrices will be used in the solver, their internal structure is fully explained in the report
+
+        # Dimensionless mass transfer coefficients matrix
+        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
+
+        # Dimensionless dispersion coefficients matrix
+        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
+
         # Check if those sizes are correct (consult Jan)
         self.g_matrix = np.diag(np.full(self.params.n_points - 1, -1), -1) + np.diag(
             np.full(self.params.n_points - 1, 1), 1)
@@ -220,20 +227,23 @@ class Solver:
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
         self.l_matrix = (1 / self.params.dz) ** 2 * self.l_matrix
 
+        if self.params.mms is True:  # check values below can be scalars// Jan
+            self.MMS = MMS(self.params, self)
+            p_partial_in = self.MMS.pi_0
+            v_in = self.MMS.nu_0
+
+        else:
+            p_partial_in = self.params.p_partial_in
+            v_in = self.params.v_in
+
         self.d_matrix = np.zeros((self.params.n_points, self.params.n_components))
-        first_row = (self.params.p_partial_in / (self.R * self.params.temp)) * (
-                (self.params.v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
+        first_row = (p_partial_in / (self.R * self.params.temp)) * (
+                (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row  # idk if that works
 
         self.b_vector = np.zeros(self.params.n_points)
         print(self.b_vector)
-        self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
-
-        # Dimensionless mass transfer coefficients matrix
-        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
-
-        # Dimensionless dispersion coefficients matrix
-        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
+        self.b_vector[0] = - v_in / (2 * self.params.dz)
 
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
@@ -254,7 +264,12 @@ class Solver:
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
-        rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
+        if self.params.mms is True:
+            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector + \
+                  self.MMS.S_nu
+
+        else:
+            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
         lhs = self.g_matrix
         velocities = np.linalg.solve(lhs, rhs)
         return velocities
@@ -281,7 +296,12 @@ class Solver:
         adsorption_term = -self.params.temp * self.R * void_frac_term * self.kl_matrix * (
                 q_eq - q_ads) + self.d_matrix
 
-        dp_dt = advection_term + dispersion_term + adsorption_term
+        if self.params.mms is True:
+            dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
+
+        else:
+            dp_dt = advection_term + dispersion_term + adsorption_term
+
         return dp_dt
 
     def verify_pressures(self, p_partial):
@@ -292,7 +312,10 @@ class Solver:
         :return: True if the pressures sum up to 1, false otherwise
         """
         p_summed = np.sum(p_partial, axis=1)
-        return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
+        if self.params.mms is True:
+            return np.allclose(p_summed, self.MMS.pt, 1.e-3, 0)
+        else:
+            return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
 
     def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
@@ -359,7 +382,6 @@ class Solver:
         return equilibrium_loadings
 
     def solve(self):
-
         q_eq = np.zeros((self.params.n_points, self.params.n_components))
         q_ads = np.zeros((self.params.n_points, self.params.n_components))
         p_partial = np.vstack(
@@ -367,9 +389,13 @@ class Solver:
         t = 0
 
         while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
-
+            # Update source functions if MMS is used and get new loadings then
+            if self.params.mms is True:
+                self.MMS.update_source_functions(t)
+                q_eq = self.MMS.q_eq_matrix
             # Calculate new loadings
-            q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            else:
+                q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
             dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
             q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             # Calculate new velocity
