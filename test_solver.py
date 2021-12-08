@@ -8,21 +8,18 @@ from solver import *
 class TestSolver(unittest.TestCase):
 
     def test_initialize_params_correct(self):
-        params = SysParams(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=4, u_in=2,
-                           void_frac=0.6, disp=[16, 8], kl=[6, 8], p_he=12, rho_p=2)
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, temp=313,
+                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False)
         self.assertEqual(params.t_end, 4)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
         self.assertEqual(params.p_in, 5)
-        self.assertEqual(params.p_out, 5)
         self.assertEqual(params.n_points, 11)
         np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8]))
         self.assertEqual(params.temp, 313)
         self.assertEqual(params.void_frac, 0.6)
         self.assertEqual(params.rho_p, 2)
-        self.assertEqual(params.p_he, 12)
-        np.testing.assert_array_equal(params.p_partial_in, np.asarray([1, 4]))
         np.testing.assert_array_equal(params.kl, np.asarray([12, 16]))
         np.testing.assert_array_equal(params.disp, np.asarray([2, 1]))
         self.assertEqual(params.c_len, 1)
@@ -30,14 +27,13 @@ class TestSolver(unittest.TestCase):
         self.assertEqual(params.dp_dz, 0)
         self.assertEqual(params.v_in, 1)
         self.assertEqual(params.n_components, 2)
-        np.testing.assert_array_equal(params.p_total, np.asarray([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]))
 
     def test_initialize_solver(self):
         n_points = 3
         n_components = 2
-        params = SysParams(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=1, u_in=1,
-                           void_frac=0.6, disp=[1, 1], kl=[1, 1], p_he=2, rho_p=2)
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium= False)
         solver = Solver(params)
         print("Matrix G: ", solver.g_matrix)
         print("Matrix L: ", solver.l_matrix)
@@ -58,12 +54,12 @@ class TestSolver(unittest.TestCase):
         """
         Case in which kl and disp are identical for each component and equal to 1.
         """
-        params = SysParams(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=1, u_in=1,
-                           void_frac=0.6, disp=[1, 1], kl=[1, 1], p_he=2, rho_p=2)
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
         solver = Solver(params)
 
-        dp_dt = solver.calculate_dp_dt(np.asarray([1, 2, 1]), np.asarray([[0.3, 0.7], [0.35, 0.65], [0.4, 0.6]]),
+        dp_dt = solver.calculate_dp_dt(np.asarray([1, 2, 1]), np.asarray([[0.3, 0.7], [0.35, 0.6], [0.4, 0.6]]),
                                        np.asarray([[1, 2], [3, 4], [2, 2]]),
                                        np.asarray([[0.5, 1.5], [2, 3], [1, 1]]))
         # Use this to test in Wolfram Alpha
@@ -79,13 +75,14 @@ class TestSolver(unittest.TestCase):
         """
         Case in which kl and disp are identical for each component and equal to 1.
         """
-        params = SysParams(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], p_he=2, rho_p=2)
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
         solver = Solver(params)
 
         velocities = solver.calculate_velocities(np.asarray([[0.3, 0.7], [0.35, 0.65], [0.4, 0.6]]),
-                                               np.asarray([[1, 2], [3, 4], [2, 2]]),
-                                               np.asarray([[0.5, 1.5], [2, 3], [1, 1]]))
+                                                 np.asarray([[1, 2], [3, 4], [2, 2]]),
+                                                 np.asarray([[0.5, 1.5], [2, 3], [1, 1]]))
 
         # The summed up term can be calculate using Wolfram Alpha with input:
         # Divide[\(40)1-0.6\(41),0.6]*2* ({{1,2},{3,4},{2,2}}-{{0.5,1.5},{2,3},{1,1}})-Divide[1,8.314*313]
@@ -94,7 +91,8 @@ class TestSolver(unittest.TestCase):
         np.testing.assert_allclose(velocities, np.asarray([-0.7525, -868.178, -1735.6]), rtol=1e-2)
 
     def test_solve_function(self):
-        params = SysParams(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], p_he=2, rho_p=500)
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=False)
         solver = Solver(params)
         solver.solve()
