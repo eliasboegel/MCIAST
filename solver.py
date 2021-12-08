@@ -335,29 +335,37 @@ class Solver:
 
         return p_partial
 
-    def linearized_system(self, peclet_magnitude):
+
+class LinearizedSystem:
+    def __init__(self, solver, sys_params):
+        self.__solver = solver
+        self.__params = sys_params
+
+    def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        lhs = self.g_matrix + self.params.dp_dz * (sp.eye(self.params.n_points).T / self.params.p_total).T
+        lhs = self.__solver.g_matrix + sp.diags(diagonals=self.__params.dp_dz/self.__params.p_total)
         # Calculate RHS matrix
-        rhs = self.l_matrix.dot(np.ones(self.params.n_points) / peclet_magnitude)
+        rhs = self.l_matrix.dot(self.__params.p_total / peclet_magnitude) / self.__params.p_total
         # Solve for nu approximation
         nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -(self.g_matrix.dot(nu) - self.l_matrix / peclet_magnitude)
-        # Calculate linearized system matrix stiffness
-        lambda_max = sp.linalg.eigs(A=a_matrix, k=1, which="LM")[0]
-        lambda_min = sp.linalg.eigs(A=a_matrix, k=1, which="SM")[0]
-        a_stiffness = np.absolute(lambda_max) / np.absolute(lambda_min)
-        return a_matrix, a_stiffness, lambda_max
+        a_matrix = -self.__solver.g_matrix * nu + self.l_matrix / peclet_magnitude
+        return a_matrix
 
-    def stiffness_estimate(self):
+    def get_stiffness_estimate(self):
         for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
                                                   ("smallest Peclet number", 1 / np.max(self.params.disp)),
                                                   ("average Peclet number", 1 / np.mean(self.params.disp))):
+            a_matrix = self.get_lin_sys_matrix(peclet_magnitude)
+            lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
+            lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM")
+            stiffness = np.absolute(lambda_max/lambda_min)
             print(f"Stiffness of linearized system matrix for {peclet_number} is "
                   f"{self.linearized_system(peclet_magnitude)[1]}")
 
     def stability_analysis(self):
+        a_matrix = get_lin_sys_matrix(self, 1 / np.max(self.params.disp))
+        lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
 
         def rk4_stability_equation(u):
             return 1 + u + u ** 2 / 2 + u ** 3 / 6 + u ** 4 / 24
@@ -365,13 +373,10 @@ class Solver:
         def fe_stability_equation(u):
             return 1 / (1 - u)
 
-        for (f_name, f) in (("RK4", rk4_stability_equation), ("FE", fe_stability_equation)):
-            for (peclet_number, peclet_magnitude) in (("largest Peclet number", 1 / np.min(self.params.disp)),
-                                                      ("smallest Peclet number", 1 / np.max(self.params.disp)),
-                                                      ("average Peclet number", 1 / np.mean(self.params.disp))):
-                def stability_condition(dt):
-                    u = self.linearized_system(peclet_magnitude)[2] * dt
-                    return np.absolute(f(u)) - 1
+        def stability_condition(f, dt):
+            u = lambda_max * dt
+            return np.absolute(f(u)) - 1
 
-                dt = opt.fsolve(func=stability_condition, x0=np.array(0.0), maxfev=1000)
-            print(f"Timestep for stability for {f_name}, {peclet_number} is {dt} seconds")
+        for (f_name, f) in (("RK4", rk4_stability_equation), ("FE", fe_stability_equation)):
+            dt = opt.fsolve(func=stability_condition, x0=np.array(0.0), maxfev=1000)
+            print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
