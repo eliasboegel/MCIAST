@@ -8,7 +8,8 @@ import os
 
 class SysParams:
     def __init__(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, p_he, rho_p, t_end=40,
-                 dt=0.001):
+                 dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
+                 mms_convergence_factor=1000):
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions. The variables are turned into the dimensionless equivalents.
@@ -73,6 +74,123 @@ class SysParams:
 
         # p_total is a sum of all partial pressures for each grid point
         self.p_total = np.linspace(p_in, p_out, num=n_points, endpoint=True)
+
+        # Parameters for running dynamic code verification using MMS
+        self.mms = mms
+        if self.mms is True:
+            self.mms_mode = mms_mode
+            self.mms_conv_factor = mms_convergence_factor
+            self.ms_pt_distribution = ms_pt_distribution
+
+
+class MMS:
+    def __init__(self, sys_params, solver):
+        # Initialize other classes as attributes
+        self.__params = sys_params
+        self.__solver = solver
+        # Initialize 1D dummy arrays as attributes
+        self.S_nu = np.zeros(self.__params.n_points - 1)
+        self.pi = np.zeros(self.__params.n_points - 1)
+        self.dpi_dz = np.zeros(self.__params.n_points - 1)
+        self.d2pi_dz2 = np.zeros(self.__params.n_points - 1)
+        self.dpi_dt = np.zeros(self.__params.n_points - 1)
+        self.nu = np.zeros(self.__params.n_points - 1)
+        self.dnu_dz = np.zeros(self.__params.n_points - 1)
+        self.dnupi_dz = np.zeros(self.__params.n_points - 1)
+        self.q_eq = np.zeros(self.__params.n_points - 1)
+        self.q_ads = np.zeros(self.__params.n_points - 1)
+        self.xi = np.linspace(self.__params.c_len, self.__params.n_points)[1:]
+        # Initialize 2D arrays as attributes
+        self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dpi_dz_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.d2pi_dz2_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dpi_dt_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dnupi_dz_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.q_eq_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.q_ads_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.delta_q_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.pi_diffusion_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        # Initialize constants as attributes
+        if self.__params.mms_mode == "steady":
+            self.b = 0
+        if self.__params.mms_mode == "transient":
+            self.b = 1
+        if self.__params.ms_pt_distribution == "constant":
+            self.a = 0
+        if self.__params.ms_pt_distribution == "linear":
+            self.a = 1
+        self.pt = 1 - self.a * self.xi / 2
+        self.pi_0 = self.pt / self.__params.n_components
+        self.nu_0 = 1
+        self.dpt_dz = - self.a / 2
+        self.c = self.__params.mms_conv_factor
+        self.xi = self.__params.xi
+        self.t_factor = 0
+        self.RT = self.__solver.R * self.__params.temp
+        self.void_term = (1 - self.__params.void_frac) / self.__params.void_frac * self.__params.rho_p * self.RT
+
+    def calculate_pi_ms(self, i):
+        self.pi = self.pi_0 + (-1) ** i * (np.sin(np.pi / 2 * self.xi) +
+                                           self.b * self.t_factor * np.sin(np.pi * self.xi))
+
+    def calculate_nu_ms(self):
+        self.nu = 1 - 0.5 * np.sin(np.pi / 2 * self.xi) + self.b * self.t_factor * np.sin(np.pi * self.xi) ** 2
+
+    def calculate_q_ads_ms(self, tau, i):
+        self.q_ads = self.b * self.__params.kl[i] * self.xi * tau * self.t_factor
+
+    def calculate_q_eq_ms(self, tau):
+        self.q_eq = self.b * self.xi * (self.t_factor - tau * self.t_factor / self.c) + self.q_ads
+
+    def calculate_dpi_dz_ms(self, i):
+        self.dpi_dz = -self.a / (2 * self.__params.n_components) + \
+                      (-1) ** i * np.pi * (0.5 * np.cos(np.pi / 2 * self.xi) +
+                                           self.b * self.t_factor * np.cos(np.pi * self.xi))
+
+    def calculate_d2pi_dz2_ms(self, i):
+        self.d2pi_dz2 = -(-1) ** i * np.pi ** 2 * (0.25 * np.sin(np.pi / 2 * self.xi) +
+                                                   self.b * self.t_factor * np.sin(np.pi * self.xi))
+
+    def calculate_dpi_dt_ms(self, i):
+        self.dpi_dt = self.b * (-(-1) ** i * self.t_factor * np.sin(np.pi * self.xi)) / self.c
+
+    def calculate_dnu_dz_ms(self):
+        self.dnu_dz = np.pi * (-0.25 * np.cos(np.pi / 2 * self.xi) +
+                               self.b * 2 * self.t_factor * np.sin(np.pi * self.xi) * np.cos(np.pi * self.xi))
+
+    def calculate_dnupi_dz(self):
+        self.dnupi_dz = self.pi * self.dnu_dz + self.nu * self.dpi_dz
+
+    def update_source_functions(self, tau):
+        # Update time factor
+        self.t_factor = np.e ** (-tau / self.c)
+        # Update MS velocity for all components
+        self.calculate_nu_ms()
+        # Update 1st derivative of MS velocity for all components
+        self.calculate_dnupi_dz()
+        for i in range(0, self.__params.n_components):
+            # Update MS pressure for component i
+            self.calculate_pi_ms(i)
+            self.pi_matrix[:, i] = np.copy(self.pi)
+            # Update 1st derivative of MS pressure for component i
+            self.calculate_dpi_dz_ms(i)
+            self.dpi_dz_matrix[:, i] = np.copy(self.dpi_dz)
+            # Update 2nd derivative of MS pressure for component i
+            self.calculate_d2pi_dz2_ms(i)
+            self.d2pi_dz2_matrix[:, i] = np.copy(self.d2pi_dz2)
+            # Update the 1st derivative of nu*p_i for component i
+            self.calculate_dnupi_dz()
+            self.dnupi_dz_matrix[:, i] = np.copy(self.dnupi_dz)
+            # Update MS time derivative of p_i
+            self.calculate_dpi_dt_ms(i)
+            self.dpi_dt_matrix[:, 1] = np.copy(self.dpi_dt)
+        self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
+        self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__solver.disp_matrix
+        self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
+                    self.void_term * self.__solver.kl_matrix * self.delta_q_matrix
+        self.S_nu = self.dnu_dz + np.sum((self.void_term * self.__solver.kl_matrix *
+                                          self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.pt
 
 
 class Solver:
