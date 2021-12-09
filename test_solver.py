@@ -59,15 +59,14 @@ class TestSolver(unittest.TestCase):
                            c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
         solver = Solver(params)
 
-        dp_dt = solver.calculate_dp_dt(np.asarray([1, 2, 1]), np.asarray([[0.3, 0.7], [0.35, 0.6], [0.4, 0.6]]),
-                                       np.asarray([[1, 2], [3, 4], [2, 2]]),
-                                       np.asarray([[0.5, 1.5], [2, 3], [1, 1]]))
+        dp_dt = solver.calculate_dp_dt(np.asarray([2, 1]), np.asarray([[0.35, 0.6], [0.4, 0.6]]),
+                                       np.asarray([[3, 4], [2, 2]]),
+                                       np.asarray([[2, 3], [1, 1]]))
         # Use this to test in Wolfram Alpha
         # -(Divide[1,0.25])*{{0,1,0},{-1,0,1},{1,-4,3}}{{0.3,0.7},{0.7,1.3},{0.4,0.6}}+(Divide[1,0.25])*{{-2,1,0},
         # {1,-2,1},{0,2,-2}}{{0.3,0.7},{0.35,0.65},{0.4,0.6}}- Divide[\(40)1-0.6\(41),0.6]*2*8.314*313
         # {{0.5,0.5},{1,1},{1,1}}+{{0.00192139,0.00768556},{0,0},{0,0}}
-        np.testing.assert_allclose(dp_dt, np.asarray([[-1738.652745, -1743.046981],
-                                                      [-3470.109333, -3469.309333],
+        np.testing.assert_allclose(dp_dt, np.asarray([[-3470.109333, -3469.309333],
                                                       [-3464.909333, -3458.509333]]), 1e-1)
         print("dp_dt: ", dp_dt)
 
@@ -80,19 +79,19 @@ class TestSolver(unittest.TestCase):
                            c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
         solver = Solver(params)
 
-        velocities = solver.calculate_velocities(np.asarray([[0.3, 0.7], [0.35, 0.65], [0.4, 0.6]]),
-                                                 np.asarray([[1, 2], [3, 4], [2, 2]]),
-                                                 np.asarray([[0.5, 1.5], [2, 3], [1, 1]]))
+        velocities = solver.calculate_velocities(np.asarray([[0.35, 0.65], [0.4, 0.6]]),
+                                                 np.asarray([[3, 4], [2, 2]]),
+                                                 np.asarray([[2, 3], [1, 1]]))
 
         # The summed up term can be calculate using Wolfram Alpha with input:
         # Divide[\(40)1-0.6\(41),0.6]*2* ({{1,2},{3,4},{2,2}}-{{0.5,1.5},{2,3},{1,1}})-Divide[1,8.314*313]
         # {{-8,4,0},{4,-8,4},{0,8,-8}}{{0.3,0.7},{0.35,0.65},{0.4,0.6}}
         # Some parts need to be calculated with a separate matrix calculator
-        np.testing.assert_allclose(velocities, np.asarray([-0.7525, -868.178, -1735.6]), rtol=1e-2)
+        np.testing.assert_allclose(velocities, np.asarray([-868.178, -1735.6]), rtol=1e-2)
 
     def test_solve_function(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=False)
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True)
         solver = Solver(params)
         solver.solve()

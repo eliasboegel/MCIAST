@@ -100,7 +100,7 @@ class SysParams:
         self.p_partial_in = self.y_in * p_in
 
         # The number of components assessed based on the length of y_in array (plus helium)
-        self.n_components = self.y_in.shape[1]
+        self.n_components = self.y_in.shape[0]
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -456,7 +456,8 @@ class Solver:
 
         equilibrium_loadings = np.zeros(partial_pressures.shape)
         for i in range(1):
-            equilibrium_loadings[i] = pyiast.iast(partial_pressures[i], [N2_isotherm, CO2_isotherm], warningoff=True)
+            print(partial_pressures[i])
+            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]), partial_pressures[i][-1])
 
         print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
@@ -466,7 +467,7 @@ class Solver:
         q_eq = np.zeros((self.params.n_points-1, self.params.n_components))
         q_ads = np.zeros((self.params.n_points-1, self.params.n_components))
 
-        p_partial = np.zeros((self.params.n_points - 1, self.params.n_components))
+        p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial[:, -1] = self.params.p_total
 
         print(p_partial)
