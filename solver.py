@@ -27,8 +27,15 @@ class SysParams:
         self.n_components = 0
         self.p_total = 0
         self.p_partial_in = 0
+        self.mms = 0
+        self.mms_mode = 0
+        self.mms_conv_factor = 0
+        self.ms_pt_distribution = 0
 
-    def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium = True, t_end=40, dt=0.001, ):
+
+def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium = True,
+                t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
+                 mms_convergence_factor=1000):
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions. The variables are turned into the dimensionless equivalents. The presence of helium
@@ -137,6 +144,123 @@ class SysParams:
             raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
 
+        # Parameters for running dynamic code verification using MMS
+        self.mms = mms
+        if self.mms is True:
+            self.mms_mode = mms_mode
+            self.mms_conv_factor = mms_convergence_factor
+            self.ms_pt_distribution = ms_pt_distribution
+
+
+class MMS:
+    def __init__(self, sys_params, solver):
+        # Initialize other classes as attributes
+        self.__params = sys_params
+        self.__solver = solver
+        # Initialize 1D dummy arrays as attributes
+        self.S_nu = np.zeros(self.__params.n_points - 1)
+        self.pi = np.zeros(self.__params.n_points - 1)
+        self.dpi_dz = np.zeros(self.__params.n_points - 1)
+        self.d2pi_dz2 = np.zeros(self.__params.n_points - 1)
+        self.dpi_dt = np.zeros(self.__params.n_points - 1)
+        self.nu = np.zeros(self.__params.n_points - 1)
+        self.dnu_dz = np.zeros(self.__params.n_points - 1)
+        self.dnupi_dz = np.zeros(self.__params.n_points - 1)
+        self.q_eq = np.zeros(self.__params.n_points - 1)
+        self.q_ads = np.zeros(self.__params.n_points - 1)
+        self.xi = np.linspace(self.__params.c_len, self.__params.n_points)[1:]
+        # Initialize 2D arrays as attributes
+        self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dpi_dz_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.d2pi_dz2_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dpi_dt_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.dnupi_dz_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.q_eq_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.q_ads_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.delta_q_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.pi_diffusion_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        # Initialize constants as attributes
+        if self.__params.mms_mode == "steady":
+            self.b = 0
+        if self.__params.mms_mode == "transient":
+            self.b = 1
+        if self.__params.ms_pt_distribution == "constant":
+            self.a = 0
+        if self.__params.ms_pt_distribution == "linear":
+            self.a = 1
+        self.pt = 1 - self.a * self.xi / 2
+        self.pi_0 = self.pt / self.__params.n_components
+        self.nu_0 = 1
+        self.dpt_dz = - self.a / 2
+        self.c = self.__params.mms_conv_factor
+        self.xi = self.__params.xi
+        self.t_factor = 0
+        self.RT = self.__solver.R * self.__params.temp
+        self.void_term = (1 - self.__params.void_frac) / self.__params.void_frac * self.__params.rho_p * self.RT
+
+    def calculate_pi_ms(self, i):
+        self.pi = self.pi_0 + (-1) ** i * (np.sin(np.pi / 2 * self.xi) +
+                                           self.b * self.t_factor * np.sin(np.pi * self.xi))
+
+    def calculate_nu_ms(self):
+        self.nu = 1 - 0.5 * np.sin(np.pi / 2 * self.xi) + self.b * self.t_factor * np.sin(np.pi * self.xi) ** 2
+
+    def calculate_q_ads_ms(self, tau, i):
+        self.q_ads = self.b * self.__params.kl[i] * self.xi * tau * self.t_factor
+
+    def calculate_q_eq_ms(self, tau):
+        self.q_eq = self.b * self.xi * (self.t_factor - tau * self.t_factor / self.c) + self.q_ads
+
+    def calculate_dpi_dz_ms(self, i):
+        self.dpi_dz = -self.a / (2 * self.__params.n_components) + \
+                      (-1) ** i * np.pi * (0.5 * np.cos(np.pi / 2 * self.xi) +
+                                           self.b * self.t_factor * np.cos(np.pi * self.xi))
+
+    def calculate_d2pi_dz2_ms(self, i):
+        self.d2pi_dz2 = -(-1) ** i * np.pi ** 2 * (0.25 * np.sin(np.pi / 2 * self.xi) +
+                                                   self.b * self.t_factor * np.sin(np.pi * self.xi))
+
+    def calculate_dpi_dt_ms(self, i):
+        self.dpi_dt = self.b * (-(-1) ** i * self.t_factor * np.sin(np.pi * self.xi)) / self.c
+
+    def calculate_dnu_dz_ms(self):
+        self.dnu_dz = np.pi * (-0.25 * np.cos(np.pi / 2 * self.xi) +
+                               self.b * 2 * self.t_factor * np.sin(np.pi * self.xi) * np.cos(np.pi * self.xi))
+
+    def calculate_dnupi_dz(self):
+        self.dnupi_dz = self.pi * self.dnu_dz + self.nu * self.dpi_dz
+
+    def update_source_functions(self, tau):
+        # Update time factor
+        self.t_factor = np.e ** (-tau / self.c)
+        # Update MS velocity for all components
+        self.calculate_nu_ms()
+        # Update 1st derivative of MS velocity for all components
+        self.calculate_dnupi_dz()
+        for i in range(0, self.__params.n_components):
+            # Update MS pressure for component i
+            self.calculate_pi_ms(i)
+            self.pi_matrix[:, i] = np.copy(self.pi)
+            # Update 1st derivative of MS pressure for component i
+            self.calculate_dpi_dz_ms(i)
+            self.dpi_dz_matrix[:, i] = np.copy(self.dpi_dz)
+            # Update 2nd derivative of MS pressure for component i
+            self.calculate_d2pi_dz2_ms(i)
+            self.d2pi_dz2_matrix[:, i] = np.copy(self.d2pi_dz2)
+            # Update the 1st derivative of nu*p_i for component i
+            self.calculate_dnupi_dz()
+            self.dnupi_dz_matrix[:, i] = np.copy(self.dnupi_dz)
+            # Update MS time derivative of p_i
+            self.calculate_dpi_dt_ms(i)
+            self.dpi_dt_matrix[:, 1] = np.copy(self.dpi_dt)
+        self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
+        self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__solver.disp_matrix
+        self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
+                    self.void_term * self.__solver.kl_matrix * self.delta_q_matrix
+        self.S_nu = self.dnu_dz + np.sum((self.void_term * self.__solver.kl_matrix *
+                                          self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.pt
+
 
 class Solver:
     # Gas constant
@@ -150,9 +274,17 @@ class Solver:
         self.params = sys_params
 
         # Those matrices will be used in the solver, their internal structure is fully explained in the report
+
+        # Dimensionless mass transfer coefficients matrix
+        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
+
+        # Dimensionless dispersion coefficients matrix
+        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
+
         # Check if those sizes are correct (consult Jan)
         self.g_matrix = np.diag(np.full(self.params.n_points - 1, -1), -1) + np.diag(
             np.full(self.params.n_points - 1, 1), 1)
+        print(self.g_matrix)
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 3] = 1
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 2] = -4
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 1] = 3
@@ -164,19 +296,23 @@ class Solver:
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
         self.l_matrix = (1 / self.params.dz) ** 2 * self.l_matrix
 
+        if self.params.mms is True:  # check values below can be scalars// Jan
+            self.MMS = MMS(self.params, self)
+            p_partial_in = self.MMS.pi_0
+            v_in = self.MMS.nu_0
+
+        else:
+            p_partial_in = self.params.p_partial_in
+            v_in = self.params.v_in
+
         self.d_matrix = np.zeros((self.params.n_points, self.params.n_components))
-        first_row = (self.params.p_partial_in / (self.R * self.params.temp)) * (
-                (self.params.v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
+        first_row = (p_partial_in / (self.R * self.params.temp)) * (
+                (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row  # idk if that works
 
         self.b_vector = np.zeros(self.params.n_points)
+        print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
-
-        # Dimensionless mass transfer coefficients matrix
-        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
-
-        # Dimensionless dispersion coefficients matrix
-        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
 
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
@@ -197,7 +333,12 @@ class Solver:
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
-        rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
+        if self.params.mms is True:
+            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector + \
+                  self.MMS.S_nu
+
+        else:
+            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
         lhs = self.g_matrix
         velocities = np.linalg.solve(lhs, rhs)
         return velocities
@@ -224,7 +365,12 @@ class Solver:
         adsorption_term = -self.params.temp * self.R * void_frac_term * self.kl_matrix * (
                 q_eq - q_ads) + self.d_matrix
 
-        dp_dt = advection_term + dispersion_term + adsorption_term
+        if self.params.mms is True:
+            dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
+
+        else:
+            dp_dt = advection_term + dispersion_term + adsorption_term
+
         return dp_dt
 
     def verify_pressures(self, p_partial):
@@ -235,7 +381,10 @@ class Solver:
         :return: True if the pressures sum up to 1, false otherwise
         """
         p_summed = np.sum(p_partial, axis=1)
-        return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
+        if self.params.mms is True:
+            return np.allclose(p_summed, self.MMS.pt, 1.e-3, 0)
+        else:
+            return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
 
     def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
@@ -314,9 +463,13 @@ class Solver:
         t = 0
 
         while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
-
+            # Update source functions if MMS is used and get new loadings then
+            if self.params.mms is True:
+                self.MMS.update_source_functions(t)
+                q_eq = self.MMS.q_eq_matrix
             # Calculate new loadings
-            q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            else:
+                q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
             dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
             q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             # Calculate new velocity
