@@ -8,7 +8,6 @@ import os
 
 class SysParams:
     def __init__(self):
-
         self.t_end = 0
         self.dt = 0
         self.nt = 0
@@ -32,10 +31,10 @@ class SysParams:
         self.mms_conv_factor = 0
         self.ms_pt_distribution = 0
 
+    def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
+                    t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
+                    mms_convergence_factor=1000):
 
-def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium = True,
-                t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
-                 mms_convergence_factor=1000):
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions. The variables are turned into the dimensionless equivalents. The presence of helium
@@ -54,6 +53,11 @@ def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, 
         :param disp: Array containing dispersion coefficient for every component.
         :param kl: Array containing effective mass transport coefficient of every component.
         :param rho_p: Density of the adsorbent.
+        :param append_helium: Choose to use helium as one of the components.
+        :param mms: Choose if dynamic code testing is switched on.
+        :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
+        :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
+        :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
         """
         # Dimensionless points in time
         self.t_end = t_end * u_in / c_len
@@ -96,9 +100,19 @@ def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, 
         self.p_partial_in = self.y_in * p_in
 
         # The number of components assessed based on the length of y_in array (plus helium)
-        self.n_components = len(self.y_in)
+        self.n_components = self.y_in.shape[1]
 
-    def init_params_dimensionless(self, y_in, n_points, p_in, temp, void_frac, disp, kl, rho_p, append_helium=True, t_end=40, dt=0.001):
+        # Parameters for running dynamic code verification using MMS
+        self.mms = mms
+        if self.mms is True:
+            self.mms_mode = mms_mode
+            self.mms_conv_factor = mms_convergence_factor
+            self.ms_pt_distribution = ms_pt_distribution
+
+    def init_params_dimensionless(self, y_in, n_points, p_in, temp, void_frac, disp, kl, rho_p, append_helium=True,
+                                  t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
+                                  mms_convergence_factor=1000):
+
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
         and the initial conditions. The variables are assumed to be dimensionless. The presence of helium
@@ -115,6 +129,10 @@ def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, 
                 :param disp: Array containing dimensionless dispersion coefficient for every component.
                 :param kl: Array containing dimensionless effective mass transport coefficient of every component.
                 :param rho_p: Density of the adsorbent.
+                param mms: Choose if dynamic code testing is switched on.
+                :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
+                :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
+                :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
                 """
         self.t_end = t_end
         self.dt = dt
@@ -143,13 +161,6 @@ def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, 
         if not 0 <= void_frac <= 1:
             raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
-
-        # Parameters for running dynamic code verification using MMS
-        self.mms = mms
-        if self.mms is True:
-            self.mms_mode = mms_mode
-            self.mms_conv_factor = mms_convergence_factor
-            self.ms_pt_distribution = ms_pt_distribution
 
 
 class MMS:
@@ -276,27 +287,27 @@ class Solver:
         # Those matrices will be used in the solver, their internal structure is fully explained in the report
 
         # Dimensionless mass transfer coefficients matrix
-        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points, self.params.n_components))
+        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points-1, self.params.n_components))
 
         # Dimensionless dispersion coefficients matrix
-        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points, self.params.n_components))
+        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points-1, self.params.n_components))
 
         # Check if those sizes are correct (consult Jan)
-        self.g_matrix = np.diag(np.full(self.params.n_points - 1, -1), -1) + np.diag(
-            np.full(self.params.n_points - 1, 1), 1)
+        self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1), -1) + np.diag(
+            np.full(self.params.n_points - 2, 1), 1)
         print(self.g_matrix)
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 3] = 1
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 2] = -4
         self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 1] = 3
         self.g_matrix = (1 / self.params.dz) ** 2 * self.g_matrix
 
-        self.l_matrix = np.diag(np.full(self.params.n_points - 1, 1), -1) + np.diag(
-            np.full(self.params.n_points - 1, 1), 1) + np.diag(np.full(self.params.n_points, -2), 0)
+        self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1), -1) + np.diag(
+            np.full(self.params.n_points - 2, 1), 1) + np.diag(np.full(self.params.n_points - 1, -2), 0)
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 2] = 2
         self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
         self.l_matrix = (1 / self.params.dz) ** 2 * self.l_matrix
 
-        if self.params.mms is True:  # check values below can be scalars// Jan
+        if self.params.mms is True:
             self.MMS = MMS(self.params, self)
             p_partial_in = self.MMS.pi_0
             v_in = self.MMS.nu_0
@@ -305,12 +316,12 @@ class Solver:
             p_partial_in = self.params.p_partial_in
             v_in = self.params.v_in
 
-        self.d_matrix = np.zeros((self.params.n_points, self.params.n_components))
+        self.d_matrix = np.zeros((self.params.n_points - 1, self.params.n_components))
         first_row = (p_partial_in / (self.R * self.params.temp)) * (
                 (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row  # idk if that works
 
-        self.b_vector = np.zeros(self.params.n_points)
+        self.b_vector = np.zeros(self.params.n_points - 1)
         print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
@@ -455,9 +466,8 @@ class Solver:
         q_eq = np.zeros((self.params.n_points, self.params.n_components))
         q_ads = np.zeros((self.params.n_points, self.params.n_components))
 
-        remaining_pressure = np.zeros((self.params.n_points - 1, self.params.n_components))
-        remaining_pressure[:, -1] = self.params.p_total
-        p_partial = np.vstack((self.params.p_partial_in, remaining_pressure))
+        p_partial = np.zeros((self.params.n_points - 1, self.params.n_components))
+        p_partial[:, -1] = self.params.p_total
 
         print(p_partial)
         t = 0
@@ -496,7 +506,7 @@ class LinearizedSystem:
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        lhs = self.__solver.g_matrix + sp.diags(diagonals=self.__params.dp_dz/self.__params.p_total)
+        lhs = self.__solver.g_matrix + sp.diags(diagonals=self.__params.dp_dz / self.__params.p_total)
         # Calculate RHS matrix
         rhs = self.l_matrix.dot(self.__params.p_total / peclet_magnitude) / self.__params.p_total
         # Solve for nu approximation
@@ -512,7 +522,7 @@ class LinearizedSystem:
             a_matrix = self.get_lin_sys_matrix(peclet_magnitude)
             lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
             lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM")
-            stiffness = np.absolute(lambda_max/lambda_min)
+            stiffness = np.absolute(lambda_max / lambda_min)
             print(f"Stiffness of linearized system matrix for {peclet_number} is "
                   f"{self.linearized_system(peclet_magnitude)[1]}")
 
