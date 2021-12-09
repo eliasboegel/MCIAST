@@ -186,4 +186,6 @@ Mkfile.old
 dkms.conf
 
 .idea
+.idea/vcs.xml
+
 /.idea/
