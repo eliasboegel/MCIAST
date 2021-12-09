@@ -441,11 +441,11 @@ class Solver:
 
         dirpath = os.path.abspath(os.path.dirname(__file__))
 
-        df_N2 = pd.read_csv(dirpath + "/n2.csv", skiprows=1)
+        df_N2 = pd.read_csv(dirpath + "/test_data/n2.csv", skiprows=1)
         N2_isotherm = pyiast.ModelIsotherm(df_N2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
                                            model="Langmuir")
 
-        df_CO2 = pd.read_csv(dirpath + "/co2.csv", skiprows=1)
+        df_CO2 = pd.read_csv(dirpath + "/test_data/co2.csv", skiprows=1)
         CO2_isotherm = pyiast.ModelIsotherm(df_CO2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
                                             model="Langmuir")
 
@@ -463,8 +463,8 @@ class Solver:
 
     def solve(self):
 
-        q_eq = np.zeros((self.params.n_points, self.params.n_components))
-        q_ads = np.zeros((self.params.n_points, self.params.n_components))
+        q_eq = np.zeros((self.params.n_points-1, self.params.n_components))
+        q_ads = np.zeros((self.params.n_points-1, self.params.n_components))
 
         p_partial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial[:, -1] = self.params.p_total
