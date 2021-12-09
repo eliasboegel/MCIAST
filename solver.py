@@ -30,10 +30,11 @@ class SysParams:
         self.mms_mode = 0
         self.mms_conv_factor = 0
         self.ms_pt_distribution = 0
+        self.outlet_boundary_type = 0
 
     def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
-                    t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
-                    mms_convergence_factor=1000):
+                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False, 
+                    ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -43,6 +44,7 @@ class SysParams:
 
         :param t_end: Final time point.
         :param dt: Length of one time step.
+        :param outlet_boundary_type: Specify the type of the outlet boundary.
         :param y_in: Array containing mole fractions at the start.
         :param n_points: Number of grid points.
         :param p_in: Total pressure at the inlet.
@@ -101,17 +103,24 @@ class SysParams:
 
         # The number of components assessed based on the length of y_in array (plus helium)
         self.n_components = self.y_in.shape[0]
-
+        
+        # Parameters for outlet boundary condition 
+        self.outlet_boundary_type = outlet_boundary_type
+        if not self.outlet_boundary_type == "Neumann" or "Numerical":
+            raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
+        
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
         if self.mms is True:
             self.mms_mode = mms_mode
             self.mms_conv_factor = mms_convergence_factor
             self.ms_pt_distribution = ms_pt_distribution
+        if self.mms is not (True or False):
+            raise Warning("mms must be either True or False")
 
     def init_params_dimensionless(self, y_in, n_points, p_in, temp, void_frac, disp, kl, rho_p, append_helium=True,
-                                  t_end=40, dt=0.001, mms=False, ms_pt_distribution="linear", mms_mode="transient",
-                                  mms_convergence_factor=1000):
+                                  t_end=40, dt=0.001, outlet_boundary_type="Neumann", mms=False, 
+                                  ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -129,7 +138,8 @@ class SysParams:
                 :param disp: Array containing dimensionless dispersion coefficient for every component.
                 :param kl: Array containing dimensionless effective mass transport coefficient of every component.
                 :param rho_p: Density of the adsorbent.
-                param mms: Choose if dynamic code testing is switched on.
+                :param outlet_boundary_type: Specify the type of the outlet boundary.
+                :param mms: Choose if dynamic code testing is switched on.
                 :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
                 :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
                 :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
@@ -161,6 +171,22 @@ class SysParams:
         if not 0 <= void_frac <= 1:
             raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
+        
+        self.outlet_boundary_type = outlet
+
+        # Parameters for outlet boundary condition 
+        self.outlet_boundary_type = outlet_boundary_type
+        if not self.outlet_boundary_type == "Neumann" or "Numerical":
+            raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
+
+        # Parameters for running dynamic code verification using MMS
+        self.mms = mms
+        if self.mms is True:
+            self.mms_mode = mms_mode
+            self.mms_conv_factor = mms_convergence_factor
+            self.ms_pt_distribution = ms_pt_distribution
+        if self.mms is not (True or False):
+            raise Warning("mms must be either True or False")
 
 
 class MMS:
@@ -292,20 +318,26 @@ class Solver:
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points-1, self.params.n_components))
 
-        # Check if those sizes are correct (consult Jan)
-        self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1), -1) + np.diag(
+        # System matrices
+        self.g_matrix = sp.diags(np.full(self.params.n_points - 2, -1), -1) + sp.diags(
             np.full(self.params.n_points - 2, 1), 1)
-        print(self.g_matrix)
-        self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 3] = 1
-        self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 2] = -4
-        self.g_matrix[self.g_matrix.shape[0] - 1][self.g_matrix.shape[1] - 1] = 3
-        self.g_matrix = (1 / self.params.dz) ** 2 * self.g_matrix
+        self.g_matrix[-1, -3] = 1
+        self.g_matrix[-1, -2] = -4
+        self.g_matrix[-1, -1] = 3
+        self.g_matrix *= (1 / self.params.dz) ** 2
+        print(self.g_matrix.toarray())
 
-        self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1), -1) + np.diag(
-            np.full(self.params.n_points - 2, 1), 1) + np.diag(np.full(self.params.n_points - 1, -2), 0)
-        self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 2] = 2
-        self.l_matrix[self.l_matrix.shape[0] - 1][self.l_matrix.shape[1] - 1] = -2
-        self.l_matrix = (1 / self.params.dz) ** 2 * self.l_matrix
+        self.l_matrix = sp.diags(np.full(self.params.n_points - 2, 1), -1) + sp.diags(
+            np.full(self.params.n_points - 2, 1), 1) + sp.diags(np.full(self.params.n_points - 1, -2), 0)
+        if self.params.outlet_boundary_type == "Neumann":
+            self.l_matrix[-1, -2] = 2
+        elif self.params.outlet_boundary_type == "Numerical":
+            self.l_matrix[-1, -4] = -1
+            self.l_matrix[-1, -3] = 4
+            self.l_matrix[-1, -2] = -5
+            self.l_matrix[-1, -1] = 2
+        self.l_matrix *= (1 / self.params.dz) ** 2
+        print(self.l_matrix.toarray())
 
         if self.params.mms is True:
             self.MMS = MMS(self.params, self)
@@ -502,18 +534,18 @@ class Solver:
 
 class LinearizedSystem:
     def __init__(self, solver, sys_params):
-        self.__solver = solver
-        self.__params = sys_params
+        self.solver = solver
+        self.params = sys_params
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        lhs = self.__solver.g_matrix + sp.diags(diagonals=self.__params.dp_dz / self.__params.p_total)
+        lhs = self.solver.g_matrix + sp.diags(diagonals=self.params.dp_dz / self.params.p_total)
         # Calculate RHS matrix
-        rhs = self.l_matrix.dot(self.__params.p_total / peclet_magnitude) / self.__params.p_total
+        rhs = self.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
         # Solve for nu approximation
         nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -self.__solver.g_matrix * nu + self.l_matrix / peclet_magnitude
+        a_matrix = -self.solver.g_matrix * nu + self.l_matrix / peclet_magnitude
         return a_matrix
 
     def get_stiffness_estimate(self):
@@ -524,11 +556,10 @@ class LinearizedSystem:
             lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
             lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM")
             stiffness = np.absolute(lambda_max / lambda_min)
-            print(f"Stiffness of linearized system matrix for {peclet_number} is "
-                  f"{self.linearized_system(peclet_magnitude)[1]}")
+            print(f"Stiffness of linearized system matrix for {peclet_number} is {stiffness}")
 
-    def stability_analysis(self):
-        a_matrix = get_lin_sys_matrix(self, 1 / np.max(self.params.disp))
+    def get_estimated_dt(self):
+        a_matrix = self.get_lin_sys_matrix(1 / np.max(self.params.disp))
         lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
 
         def rk4_stability_equation(u):
