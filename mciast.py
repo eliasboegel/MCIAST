@@ -1,22 +1,8 @@
-import platform, os
-import mciast_iast
+from ctypes import c_void_p, c_double, c_int, cdll
 
-import numpy as np
-np.set_printoptions(edgeitems=30, linewidth=1000)
+mciast_lib = cdll.LoadLibrary("./mciast.so")
 
-class Mixture:
-    n_components = None
-    __available_models = ['sslangmuir']
-    partial_pressures = None
-    isotherm_model = None
-    isotherm_data = None
 
-    def __init__(self, partial_pressures, isotherm_model, isotherm_data):
-        self.n_components = partial_pressures.shape[0]
-        self.partial_pressures = partial_pressures
-        self.isotherm_model = isotherm_model
-        self.isotherm_data = isotherm_data
+#spreading_pressure_langmuir = lib.spreading_pressure_langmuir
+#spreading_pressure_langmuir.restype = c_double
 
-def solve_iast(Mixture):
-    return mciast_iast.__iast_solve(Mixture)
-    
