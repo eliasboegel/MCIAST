@@ -184,3 +184,8 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+.idea
+.idea/vcs.xml
+
+/.idea/
