@@ -34,7 +34,8 @@ class SysParams:
         self.outlet_boundary_type = 0
         self.void_frac_term = 0
 
-    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
+    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
+                    append_helium=True,
                     t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
@@ -102,7 +103,7 @@ class SysParams:
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
-        self.p_total = np.linspace(p_in, p_out, n_points)
+        self.p_total = np.linspace(p_in, p_out, n_points)[1:]
 
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
@@ -278,27 +279,31 @@ class Solver:
         self.p_t_column = self.params.p_total.reshape((-1, 1))
 
         # System matrices
-        self.g_matrix = sp.diags(np.full(self.params.n_points - 2, -1), -1) + \
-                        sp.diags(np.full(self.params.n_points - 2, 1), 1)
-        self.g_matrix[-1, -3] = 1
-        self.g_matrix[-1, -2] = -4
-        self.g_matrix[-1, -1] = 3
-        self.g_matrix /= 2 * self.params.dz
+        self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1.0), -1) + np.diag(
+            np.full(self.params.n_points - 2, 1.0), 1)
+        self.g_matrix[-1, -3] = 1.0
+        self.g_matrix[-1, -2] = -4.0
+        self.g_matrix[-1, -1] = 3.0
+        print(self.g_matrix)
+        print(self.params.dz)
+        self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
+        self.g_matrix = sp.dia_matrix(self.g_matrix)
         print(self.g_matrix.toarray())
 
         self.f_matrix = sp.diags(self.params.dp_dz / self.params.p_total)
-
-        self.l_matrix = sp.diags(np.full(self.params.n_points - 2, 1), -1) + sp.diags(
-            np.full(self.params.n_points - 2, 1), 1) + sp.diags(np.full(self.params.n_points - 1, -2), 0)
+        print(f"f_matrix: {self.f_matrix.toarray()}")
+        self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
+            np.full(self.params.n_points - 2, 1.0), 1) + np.diag(np.full(self.params.n_points - 1, -2.0), 0)
         if self.params.outlet_boundary_type == "Neumann":
-            self.l_matrix[-1, -2] = 2
+            self.l_matrix[-1, -2] = 2.0
         elif self.params.outlet_boundary_type == "Numerical":
-            self.l_matrix[-1, -4] = -1
-            self.l_matrix[-1, -3] = 4
-            self.l_matrix[-1, -2] = -5
-            self.l_matrix[-1, -1] = 2
+            self.l_matrix[-1, -4] = -1.0
+            self.l_matrix[-1, -3] = 4.0
+            self.l_matrix[-1, -2] = -5.0
+            self.l_matrix[-1, -1] = 2.0
         self.l_matrix /= self.params.dz ** 2
-        print(self.l_matrix.toarray())
+        self.l_matrix = sp.dia_matrix(self.l_matrix)
+        print(f"l_matrix {self.l_matrix.toarray()}")
 
         if self.params.mms is True:
             self.MMS = MMS(self.params, self)
@@ -309,10 +314,11 @@ class Solver:
             p_partial_in = self.params.p_partial_in
             v_in = self.params.v_in
 
-        self.d_matrix = sp.csr_matrix((self.params.n_points - 1, self.params.n_components))
+        self.d_matrix = np.zeros((self.params.n_points - 1, self.params.n_components), dtype="float")
         first_row = p_partial_in / (self.R * self.params.temp) * (
                 (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row
+        # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
         self.b_vector = np.zeros(self.params.n_points - 1)
         print(self.b_vector)
@@ -341,7 +347,7 @@ class Solver:
                   self.MMS.S_nu
 
         else:
-            rhs = -self.R * self.params.temp * component_sums / self.p_t_column - self.b_vector
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector
         lhs = self.g_matrix + self.f_matrix
         velocities = sp.linalg.spsolve(lhs, rhs)
         return velocities
@@ -361,11 +367,10 @@ class Solver:
         velocities = velocities.reshape((-1, 1))
 
         m_matrix = np.multiply(velocities, p_partial)
-        void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
 
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
-        adsorption_term = -self.params.temp * self.R * void_frac_term * np.multiply(self.kl_matrix, q_eq - q_ads) + \
+        adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * np.multiply(self.kl_matrix, q_eq - q_ads) + \
                           self.d_matrix
 
         if self.params.mms is True:
@@ -427,7 +432,7 @@ class Solver:
         """
         if dp_dt is None:
             return False
-        return np.allclose(np.zeros(shape=(self.params.n_points-1, self.params.n_components)), dp_dt, 1e-5)
+        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt, 1e-5)
 
     def load_pyiast(self, partial_pressures):
 
@@ -447,7 +452,7 @@ class Solver:
         ])
 
         equilibrium_loadings = np.zeros(partial_pressures.shape)
-        for i in range(1):
+        for i in range(partial_pressures.shape[0]):
             print(partial_pressures[i])
             equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]),
                                                 partial_pressures[i][-1])
@@ -457,12 +462,13 @@ class Solver:
 
     def solve(self):
 
-        q_ads = np.zeros((self.params.n_points-1, self.params.n_components))
+        q_ads = np.zeros((self.params.n_points - 1, self.params.n_components))
 
         p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial[:, -1] = self.params.p_total
 
         t = 0
+        dp_dt = None
 
         while (not self.check_steady_state(dp_dt)) or t < self.params.t_end:
             # Update source functions if MMS is used and get new loadings then
@@ -497,6 +503,8 @@ class LinearizedSystem:
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
+        print(f"g_matrix: {self.solver.g_matrix.toarray()}")
+        print(f"f_matrix: {self.solver.f_matrix.toarray()}")
         lhs = self.solver.g_matrix + self.solver.f_matrix
         # Calculate RHS matrix
         rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.solver.p_t_column
