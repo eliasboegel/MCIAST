@@ -274,14 +274,19 @@ class Solver:
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points - 1, self.params.n_components))
 
+        # Total pressure vector as column
+        self.p_t_column = self.params.p_total.reshape((-1, 1))
+
         # System matrices
-        self.g_matrix = sp.diags(np.full(self.params.n_points - 2, -1), -1) + sp.diags(
-            np.full(self.params.n_points - 2, 1), 1)
+        self.g_matrix = sp.diags(np.full(self.params.n_points - 2, -1), -1) + \
+                        sp.diags(np.full(self.params.n_points - 2, 1), 1)
         self.g_matrix[-1, -3] = 1
         self.g_matrix[-1, -2] = -4
         self.g_matrix[-1, -1] = 3
-        self.g_matrix *= (1 / self.params.dz) ** 2
+        self.g_matrix /= 2 * self.params.dz
         print(self.g_matrix.toarray())
+
+        self.f_matrix = sp.diags(self.params.dp_dz / self.params.p_total)
 
         self.l_matrix = sp.diags(np.full(self.params.n_points - 2, 1), -1) + sp.diags(
             np.full(self.params.n_points - 2, 1), 1) + sp.diags(np.full(self.params.n_points - 1, -2), 0)
@@ -292,7 +297,7 @@ class Solver:
             self.l_matrix[-1, -3] = 4
             self.l_matrix[-1, -2] = -5
             self.l_matrix[-1, -1] = 2
-        self.l_matrix *= (1 / self.params.dz) ** 2
+        self.l_matrix /= self.params.dz ** 2
         print(self.l_matrix.toarray())
 
         if self.params.mms is True:
@@ -304,10 +309,10 @@ class Solver:
             p_partial_in = self.params.p_partial_in
             v_in = self.params.v_in
 
-        self.d_matrix = np.zeros((self.params.n_points - 1, self.params.n_components))
-        first_row = (p_partial_in / (self.R * self.params.temp)) * (
+        self.d_matrix = sp.csr_matrix((self.params.n_points - 1, self.params.n_components))
+        first_row = p_partial_in / (self.R * self.params.temp) * (
                 (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
-        self.d_matrix[0] = first_row  # idk if that works
+        self.d_matrix[0] = first_row
 
         self.b_vector = np.zeros(self.params.n_points - 1)
         print(self.b_vector)
@@ -325,20 +330,20 @@ class Solver:
         :return: Array containing velocities at each grid point.
         """
 
-        ldf = self.params.kl.T * (q_eq - q_ads)
-        lp = (self.disp_matrix / (self.R * self.params.temp)) * self.l_matrix.dot(p_partial)
+        ldf = np.multiply(self.kl_matrix, q_eq - q_ads)
+        lp = np.multiply(self.disp_matrix / (self.R * self.params.temp), self.l_matrix.dot(p_partial))
         component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector + \
+            rhs = -self.R * self.params.temp * component_sums / self.p_t_column - self.b_vector + \
                   self.MMS.S_nu
 
         else:
-            rhs = -(1 / self.params.p_total) * self.R * self.params.temp * component_sums - self.b_vector
-        lhs = self.g_matrix
-        velocities = np.linalg.solve(lhs, rhs)
+            rhs = -self.R * self.params.temp * component_sums / self.p_t_column - self.b_vector
+        lhs = self.g_matrix + self.f_matrix
+        velocities = sp.linalg.spsolve(lhs, rhs)
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -358,10 +363,10 @@ class Solver:
         m_matrix = np.multiply(velocities, p_partial)
         void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
 
-        advection_term = -np.dot(self.g_matrix, m_matrix)
-        dispersion_term = self.disp_matrix * np.dot(self.l_matrix, p_partial)
-        adsorption_term = -self.params.temp * self.R * void_frac_term * self.kl_matrix * (
-                q_eq - q_ads) + self.d_matrix
+        advection_term = -self.g_matrix.dot(m_matrix)
+        dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
+        adsorption_term = -self.params.temp * self.R * void_frac_term * np.multiply(self.kl_matrix, q_eq - q_ads) + \
+                          self.d_matrix
 
         if self.params.mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
@@ -400,7 +405,7 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        dq_ads_dt = np.transpose(self.params.kl) * (q_eq - q_ads)
+        dq_ads_dt = np.multiply(self.kl_matrix, q_eq - q_ads)
         return dq_ads_dt
 
     def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
@@ -412,7 +417,7 @@ class Solver:
         """
         return q_ads_old + self.params.dt * dq_ads_dt
 
-    def check_equilibrium(self, p_partial_new):
+    def check_steady_state(self, dp_dt):
         """
         Checks if the components have reached equilibrium and the adsorption process is finished by comparing
         partial pressures at the inlet and the outlet.
@@ -420,9 +425,9 @@ class Solver:
         :param p_partial_new: Matrix containing new partial pressures of all components at every point.
         :return: True if the equilibrium is reached, false otherwise.
         """
-        if p_partial_new is None:
+        if dp_dt is None:
             return False
-        return np.allclose(p_partial_new[0], p_partial_new[p_partial_new.shape[0] - 1], 1.e-5)
+        return np.allclose(np.zeros(shape=(self.params.n_points-1, self.params.n_components)), dp_dt, 1e-5)
 
     def load_pyiast(self, partial_pressures):
 
@@ -452,16 +457,14 @@ class Solver:
 
     def solve(self):
 
-        q_eq = np.zeros((self.params.n_points - 1, self.params.n_components))
-        q_ads = np.zeros((self.params.n_points - 1, self.params.n_components))
+        q_ads = np.zeros((self.params.n_points-1, self.params.n_components))
 
         p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial[:, -1] = self.params.p_total
 
-        print(p_partial)
         t = 0
 
-        while (not self.check_equilibrium(p_partial)) or t < self.params.t_end:
+        while (not self.check_steady_state(dp_dt)) or t < self.params.t_end:
             # Update source functions if MMS is used and get new loadings then
             if self.params.mms is True:
                 self.MMS.update_source_functions(t)
@@ -481,7 +484,6 @@ class Solver:
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
-            print(p_partial)
 
             t += self.params.dt
 
@@ -495,13 +497,13 @@ class LinearizedSystem:
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        lhs = self.solver.g_matrix + sp.diags(diagonals=self.params.dp_dz / self.params.p_total)
+        lhs = self.solver.g_matrix + self.solver.f_matrix
         # Calculate RHS matrix
-        rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
+        rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.solver.p_t_column
         # Solve for nu approximation
         nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -self.solver.g_matrix * nu + self.solver.l_matrix / peclet_magnitude
+        a_matrix = -self.solver.g_matrix.multiply(nu.reshape((-1, 1))) + self.solver.l_matrix / peclet_magnitude
         return a_matrix
 
     def get_stiffness_estimate(self):
