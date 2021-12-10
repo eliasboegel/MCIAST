@@ -94,4 +94,6 @@ class TestSolver(unittest.TestCase):
         params.init_params(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
                            c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True)
         solver = Solver(params)
+        ls = LinearizedSystem(solver, params)
+        ls.get_estimated_dt()
         solver.solve()

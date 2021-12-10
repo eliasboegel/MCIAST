@@ -33,7 +33,7 @@ class SysParams:
         self.outlet_boundary_type = 0
 
     def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
-                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False, 
+                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
@@ -103,12 +103,12 @@ class SysParams:
 
         # The number of components assessed based on the length of y_in array (plus helium)
         self.n_components = self.y_in.shape[0]
-        
-        # Parameters for outlet boundary condition 
+
+        # Parameters for outlet boundary condition
         self.outlet_boundary_type = outlet_boundary_type
         if not self.outlet_boundary_type == "Neumann" or "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
-        
+
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
         if self.mms is True:
@@ -119,7 +119,7 @@ class SysParams:
             raise Warning("mms must be either True or False")
 
     def init_params_dimensionless(self, y_in, n_points, p_in, temp, void_frac, disp, kl, rho_p, append_helium=True,
-                                  t_end=40, dt=0.001, outlet_boundary_type="Neumann", mms=False, 
+                                  t_end=40, dt=0.001, outlet_boundary_type="Neumann", mms=False,
                                   ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
@@ -171,10 +171,10 @@ class SysParams:
         if not 0 <= void_frac <= 1:
             raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
-        
+
         self.outlet_boundary_type = outlet
 
-        # Parameters for outlet boundary condition 
+        # Parameters for outlet boundary condition
         self.outlet_boundary_type = outlet_boundary_type
         if not self.outlet_boundary_type == "Neumann" or "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
@@ -541,11 +541,11 @@ class LinearizedSystem:
         # Calculate LHS matrix
         lhs = self.solver.g_matrix + sp.diags(diagonals=self.params.dp_dz / self.params.p_total)
         # Calculate RHS matrix
-        rhs = self.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
+        rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
         # Solve for nu approximation
         nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -self.solver.g_matrix * nu + self.l_matrix / peclet_magnitude
+        a_matrix = -self.solver.g_matrix * nu + self.solver.l_matrix / peclet_magnitude
         return a_matrix
 
     def get_stiffness_estimate(self):
