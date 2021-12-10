@@ -9,12 +9,14 @@ class TestSolver(unittest.TestCase):
 
     def test_initialize_params_correct(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, temp=313,
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
                            c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False)
         self.assertEqual(params.t_end, 4)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
-        self.assertEqual(params.p_in, 5)
+        self.assertEqual(params.p_in, 5.0)
+        self.assertEqual(params.p_out, 5.0)
+        np.testing.assert_array_equal(params.p_total, [5.0]*11)
         self.assertEqual(params.n_points, 11)
         np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8]))
         self.assertEqual(params.temp, 313)

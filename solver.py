@@ -12,6 +12,7 @@ class SysParams:
         self.dt = 0
         self.nt = 0
         self.p_in = 0
+        self.p_out = 0
         self.n_points = 0
         self.y_in = 0
         self.temp = 0
@@ -31,17 +32,20 @@ class SysParams:
         self.mms_conv_factor = 0
         self.ms_pt_distribution = 0
         self.outlet_boundary_type = 0
+        self.void_frac_term = 0
 
-    def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
+    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p, append_helium=True,
                     t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
-        and the initial conditions. The variables are turned into the dimensionless equivalents. The presence of helium
-        is implicit. It means that it is always present no matter what parameters are passed. Its pressure is equal
-        to the pressure of all components at the inlet. Therefore, the number of components is always len(y_in)+1.
+        and the initial conditions. Depending on the dimensionless paramter, the variables might turned into the
+        dimensionless equivalents. The presence of helium is implicit. It means that it is always present no matter
+        what parameters are passed. Its pressure is equal to the pressure of all components at the inlet.
+        Therefore, the number of components is always len(y_in)+1.
 
+        :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
         :param outlet_boundary_type: Specify the type of the outlet boundary.
@@ -61,14 +65,45 @@ class SysParams:
         :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
         :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
         """
-        # Dimensionless points in time
-        self.t_end = t_end * u_in / c_len
-        self.dt = dt * u_in / c_len
-        self.nt = self.t_end / self.dt
+
+        if dimensionless:
+            # Dimensionless points in time
+            self.t_end = t_end * u_in / c_len
+            self.dt = dt * u_in / c_len
+            self.nt = self.t_end / self.dt
+
+            if append_helium:
+                # 0 appended at the end for helium.
+                self.y_in = np.append(np.asarray(y_in), 0)
+                # Dimensionless mass transfer coefficients, with the coefficient of helium appended
+                self.kl = np.append(np.asarray(kl) * c_len / u_in, 0)
+                # Dimensionless dispersion coefficients, with the coefficient of helium appended
+                self.disp = np.append(np.asarray(disp) / (c_len * u_in), 1)
+            else:
+                self.y_in = np.asarray(y_in)
+                self.kl = np.asarray(kl) * c_len / u_in
+                self.disp = np.asarray(disp) / (c_len * u_in)
+
+        else:
+            self.t_end = t_end
+            self.dt = dt
+            self.nt = self.t_end / self.dt
+
+            if append_helium:
+                self.y_in = np.append(np.asarray(y_in), 0)
+                self.kl = np.append(np.asarray(kl), 0)
+                self.disp = np.append(np.asarray(disp), 1)
+            else:
+                self.y_in = np.asarray(y_in)
+                self.kl = np.asarray(kl)
+                self.disp = np.asarray(disp)
+
         # Pressure at the inlet is also equal to the total pressure at each point of the grid
         self.p_in = p_in
-        self.p_total = p_in
+        self.p_out = p_out
         self.n_points = n_points
+        self.p_total = np.linspace(p_in, p_out, n_points)
+
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
         if temp < 0:
@@ -78,27 +113,18 @@ class SysParams:
             raise Exception("Void fraction is incorrect")
         self.void_frac = void_frac
         self.rho_p = rho_p
+        # Used to calculate velocity
+        self.void_frac_term = ((1 - self.void_frac) / self.void_frac) * self.rho_p
 
         # Dimensionless length of the column (always 1)
         self.c_len = 1
         self.dz = self.c_len / (n_points - 1)
         # Dimensionless gradient of the total pressure
         # This can be modified if we assume the gradient is not constant
-        self.dp_dz = 0
+        self.dp_dz = (p_out - p_in) / self.c_len
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
 
-        if append_helium:
-            # 0 appended at the end for helium.
-            self.y_in = np.append(np.asarray(y_in), 0)
-            # Dimensionless mass transfer coefficients, with the coefficient of helium appended
-            self.kl = np.append(np.asarray(kl) * c_len / u_in, 0)
-            # Dimensionless dispersion coefficients, with the coefficient of helium appended
-            self.disp = np.append(np.asarray(disp) / (c_len * u_in), 1)
-        else:
-            self.y_in = np.asarray(y_in)
-            self.kl = np.asarray(kl) * c_len / u_in
-            self.disp = np.asarray(disp) / (c_len * u_in)
         self.p_partial_in = self.y_in * p_in
 
         # The number of components assessed based on the length of y_in array (plus helium)
@@ -106,7 +132,7 @@ class SysParams:
 
         # Parameters for outlet boundary condition
         self.outlet_boundary_type = outlet_boundary_type
-        if not self.outlet_boundary_type == "Neumann" or "Numerical":
+        if self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
 
         # Parameters for running dynamic code verification using MMS
@@ -115,77 +141,7 @@ class SysParams:
             self.mms_mode = mms_mode
             self.mms_conv_factor = mms_convergence_factor
             self.ms_pt_distribution = ms_pt_distribution
-        if self.mms is not (True or False):
-            raise Warning("mms must be either True or False")
-
-    def init_params_dimensionless(self, y_in, n_points, p_in, temp, void_frac, disp, kl, rho_p, append_helium=True,
-                                  t_end=40, dt=0.001, outlet_boundary_type="Neumann", mms=False,
-                                  ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
-
-        """
-        Initializes the solver with the parameters that remain constant throughout the calculations
-        and the initial conditions. The variables are assumed to be dimensionless. The presence of helium
-        is implicit. It means that it is always present no matter what parameters are passed. Its pressure is equal
-        to the pressure of all components at the inlet. Therefore, the number of components is always len(y_in)+1.
-
-                :param t_end: Dimensionless final time point.
-                :param dt: Dimensionless length of one time step.
-                :param y_in: Array containing mole fractions at the start.
-                :param n_points: Number of grid points.
-                :param p_in: Total pressure at the inlet.
-                :param temp: Temperature of the system in Kelvins.
-                :param void_frac: Void fraction (epsilon).
-                :param disp: Array containing dimensionless dispersion coefficient for every component.
-                :param kl: Array containing dimensionless effective mass transport coefficient of every component.
-                :param rho_p: Density of the adsorbent.
-                :param outlet_boundary_type: Specify the type of the outlet boundary.
-                :param mms: Choose if dynamic code testing is switched on.
-                :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
-                :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
-                :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
-                """
-        self.t_end = t_end
-        self.dt = dt
-        self.nt = self.t_end / self.dt
-        self.n_points = n_points
-        self.rho_p = rho_p
-        self.c_len = 1
-        self.dz = self.c_len / (n_points - 1)
-        self.dp_dz = 0
-        self.v_in = 1
-        self.n_components = 0
-
-        if append_helium:
-            self.y_in = np.append(np.asarray(y_in), 0)
-            self.kl = np.append(np.asarray(kl), 0)
-            self.disp = np.append(np.asarray(disp), 1)
-        else:
-            self.y_in = np.asarray(y_in)
-            self.kl = np.asarray(kl)
-            self.disp = np.asarray(disp)
-        self.p_partial_in = self.y_in * p_in
-
-        if temp < 0:
-            raise Exception("Temperature cannot be below 0")
-        self.temp = temp
-        if not 0 <= void_frac <= 1:
-            raise Exception("Void fraction is incorrect")
-        self.void_frac = void_frac
-
-        self.outlet_boundary_type = outlet
-
-        # Parameters for outlet boundary condition
-        self.outlet_boundary_type = outlet_boundary_type
-        if not self.outlet_boundary_type == "Neumann" or "Numerical":
-            raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
-
-        # Parameters for running dynamic code verification using MMS
-        self.mms = mms
-        if self.mms is True:
-            self.mms_mode = mms_mode
-            self.mms_conv_factor = mms_convergence_factor
-            self.ms_pt_distribution = ms_pt_distribution
-        if self.mms is not (True or False):
+        if type(self.mms) != bool:
             raise Warning("mms must be either True or False")
 
 
@@ -313,10 +269,10 @@ class Solver:
         # Those matrices will be used in the solver, their internal structure is fully explained in the report
 
         # Dimensionless mass transfer coefficients matrix
-        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points-1, self.params.n_components))
+        self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points - 1, self.params.n_components))
 
         # Dimensionless dispersion coefficients matrix
-        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points-1, self.params.n_components))
+        self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points - 1, self.params.n_components))
 
         # System matrices
         self.g_matrix = sp.diags(np.full(self.params.n_points - 2, -1), -1) + sp.diags(
@@ -371,8 +327,7 @@ class Solver:
 
         ldf = self.params.kl.T * (q_eq - q_ads)
         lp = (self.disp_matrix / (self.R * self.params.temp)) * self.l_matrix.dot(p_partial)
-        void_frac_term = ((1 - self.params.void_frac) / self.params.void_frac) * self.params.rho_p
-        component_sums = np.sum(void_frac_term * ldf - lp, axis=1)
+        component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
         # Can we assume that to total pressure is equal to the sum of partial pressures in the beginning?
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
@@ -489,15 +444,16 @@ class Solver:
         equilibrium_loadings = np.zeros(partial_pressures.shape)
         for i in range(1):
             print(partial_pressures[i])
-            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]), partial_pressures[i][-1])
+            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]),
+                                                partial_pressures[i][-1])
 
         print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def solve(self):
 
-        q_eq = np.zeros((self.params.n_points-1, self.params.n_components))
-        q_ads = np.zeros((self.params.n_points-1, self.params.n_components))
+        q_eq = np.zeros((self.params.n_points - 1, self.params.n_components))
+        q_ads = np.zeros((self.params.n_points - 1, self.params.n_components))
 
         p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial[:, -1] = self.params.p_total
