@@ -275,23 +275,22 @@ class Solver:
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points - 1, self.params.n_components))
 
-        # Total pressure vector as column
-        self.p_t_column = self.params.p_total.reshape((-1, 1))
-
         # System matrices
         self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1)
         self.g_matrix[-1, -3] = 1.0
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
-        print(self.g_matrix)
-        print(self.params.dz)
+        #print(self.g_matrix)
+        #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.dia_matrix(self.g_matrix)
         print(self.g_matrix.toarray())
 
-        self.f_matrix = sp.diags(self.params.dp_dz / self.params.p_total)
+        self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
+        self.f_matrix = sp.csr_matrix(self.f_matrix)
         print(f"f_matrix: {self.f_matrix.toarray()}")
+
         self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1) + np.diag(np.full(self.params.n_points - 1, -2.0), 0)
         if self.params.outlet_boundary_type == "Neumann":
@@ -302,7 +301,7 @@ class Solver:
             self.l_matrix[-1, -2] = -5.0
             self.l_matrix[-1, -1] = 2.0
         self.l_matrix /= self.params.dz ** 2
-        self.l_matrix = sp.dia_matrix(self.l_matrix)
+        self.l_matrix = sp.csr_matrix(self.l_matrix)
         print(f"l_matrix {self.l_matrix.toarray()}")
 
         if self.params.mms is True:
@@ -321,7 +320,7 @@ class Solver:
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
         self.b_vector = np.zeros(self.params.n_points - 1)
-        print(self.b_vector)
+        # print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
     def calculate_velocities(self, p_partial, q_eq, q_ads):
@@ -343,7 +342,7 @@ class Solver:
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -self.R * self.params.temp * component_sums / self.p_t_column - self.b_vector + \
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector + \
                   self.MMS.S_nu
 
         else:
@@ -370,8 +369,8 @@ class Solver:
 
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
-        adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * np.multiply(self.kl_matrix, q_eq - q_ads) + \
-                          self.d_matrix
+        adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * \
+                          np.multiply(self.kl_matrix, q_eq - q_ads) + self.d_matrix
 
         if self.params.mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
@@ -503,15 +502,14 @@ class LinearizedSystem:
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        print(f"g_matrix: {self.solver.g_matrix.toarray()}")
-        print(f"f_matrix: {self.solver.f_matrix.toarray()}")
-        lhs = self.solver.g_matrix + self.solver.f_matrix
+        # lhs = self.solver.g_matrix + self.solver.f_matrix
         # Calculate RHS matrix
-        rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.solver.p_t_column
+        # rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
         # Solve for nu approximation
-        nu = sp.linalg.spsolve(lhs, rhs)
+        # nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -self.solver.g_matrix.multiply(nu.reshape((-1, 1))) + self.solver.l_matrix / peclet_magnitude
+        # a_matrix = -self.solver.g_matrix.multiply(nu.reshape((-1, 1))) + self.solver.l_matrix / peclet_magnitude
+        a_matrix = -self.solver.g_matrix + self.solver.l_matrix / peclet_magnitude
         return a_matrix
 
     def get_stiffness_estimate(self):
@@ -519,25 +517,25 @@ class LinearizedSystem:
                                                   ("smallest Peclet number", 1 / np.max(self.params.disp)),
                                                   ("average Peclet number", 1 / np.mean(self.params.disp))):
             a_matrix = self.get_lin_sys_matrix(peclet_magnitude)
-            lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
-            lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM")
+            lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM", return_eigenvectors=False)[0]
+            lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM", return_eigenvectors=False)[0]
             stiffness = np.absolute(lambda_max / lambda_min)
             print(f"Stiffness of linearized system matrix for {peclet_number} is {stiffness}")
 
     def get_estimated_dt(self):
         a_matrix = self.get_lin_sys_matrix(1 / np.max(self.params.disp))
-        lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
+        lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM", return_eigenvectors=False)[0]
 
         def rk4_stability_equation(u):
-            return 1 + u + u ** 2 / 2 + u ** 3 / 6 + u ** 4 / 24
+            return 1 + u + (u ** 2) / 2 + (u ** 3) / 6 + (u ** 4) / 24
 
-        def fe_stability_equation(u):
+        def be_stability_equation(u):
             return 1 / (1 - u)
 
-        def stability_condition(f, dt):
+        def stability_condition(dt, f):
             u = lambda_max * dt
             return np.absolute(f(u)) - 1
 
-        for (f_name, f) in (("RK4", rk4_stability_equation), ("FE", fe_stability_equation)):
-            dt = opt.fsolve(func=stability_condition, x0=np.array(0.0), maxfev=1000)
+        for (f_name, f) in (("RK4", rk4_stability_equation), ("BE", be_stability_equation)):
+            dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1.0), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
