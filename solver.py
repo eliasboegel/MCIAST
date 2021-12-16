@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.optimize as opt
 import pyiast
 import pandas as pd
-import os
+
 
 
 class SysParams:
@@ -407,15 +407,6 @@ class Solver:
         else:
             return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
-    def calculate_next_pressure(self, p_partial_old, dp_dt):
-        """
-        Steps in time to calculate the partial pressures of each component in the next point of time.
-        :param p_partial_old: Matrix containing old partial pressures.
-        :param dp_dt: Matrix containing time derivatives of partial pressures of each component at each grid point.
-        :return: Matrix containing new partial pressures.
-        """
-        return p_partial_old + self.params.dt * dp_dt
-
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
         Calculates the time derivative of average component loadings in the adsorbent at each point.
@@ -424,15 +415,6 @@ class Solver:
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
         return np.multiply(self.kl_matrix, q_eq - q_ads)
-
-    def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
-        """
-        Steps in time to calculate the average loadings in the adsorbent of each component in the next point of time.
-        :param q_ads_old: Matrix containing old average loadings.
-        :param dq_ads_dt: Matrix containing time derivatives of average loadings of each component at each grid point.
-        :return: Matrix containing new average loadings.
-        """
-        return q_ads_old + self.params.dt * dq_ads_dt
 
     def check_steady_state(self, dp_dt):
         """
@@ -475,38 +457,69 @@ class Solver:
 
     def solve(self):
 
-        q_ads = np.zeros((self.params.n_points - 1, self.params.n_components))
-
-        p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
-        p_partial[:, -1] = self.params.p_total
-
-        t = 0
-        dp_dt = None
-
-        while (not self.check_steady_state(dp_dt)) or t < self.params.t_end:
+        # Create functions to be called in the main loop
+        def calculate_dudt(u, time):
+            # Disassemble solution matrix
+            p_partial = u[0:self.params.n_points]
+            q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
             # Update source functions if MMS is used and get new loadings then
             if self.params.mms is True:
-                self.MMS.update_source_functions(t)
+                self.MMS.update_source_functions(time)
                 q_eq = self.MMS.q_eq_matrix
             # Calculate new loadings
             else:
                 q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            # Calculate loading derivative
             dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-            q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             # Calculate new velocity
             v = self.calculate_velocities(p_partial, q_eq, q_ads)
-
-            # Calculate new partial pressures
+            # Calculate new partial pressures derivative
             dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-            p_partial = self.calculate_next_pressure(p_partial, dp_dt)
-            if not self.verify_pressures(p_partial):
+            # Assemble and return solution gradient matrix
+            return np.concatenate((dp_dt, dq_ads_dt), axis=1)
+
+        def crank_nicolson(u_new, u_old):
+            return u_old + 0.5 * self.params.dt * (calculate_dudt(u_new, t + self.params.dt) +
+                                                   calculate_dudt(u_old, t)) - u_new
+
+        def forward_euler(u_old):
+            return u_old + self.params.dt * calculate_dudt(u_old, t)
+
+        def backward_euler(u_new, u_old):
+            return u_old + self.params.dt * calculate_dudt(u_new, t + self.params.dt) - u_new
+
+
+        q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
+        p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
+        p_partial_initial[:, -1] = self.params.p_total
+        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=1)
+
+        t = 0
+        du_dt = None
+
+        while (not self.check_steady_state(du_dt)) or t < self.params.t_end:
+            if self.params.time_stepping == "BE":
+                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+            elif self.params.time_stepping == "FE":
+                u_1 = forward_euler(u_0)
+            elif self.params.time_stepping == "CN":
+                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+
+            if not self.verify_pressures(u_1[0:self.params.n_points]):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
 
+            # Calculate derivative to check convergance
+            du_dt = (u_1 - u_0)/self.params.dt
+
+            # Update time
             t += self.params.dt
 
-        return p_partial
+            # Initialize variables for the next time step
+            u_0 = u_1
+
+        return u_1[0:self.params.n_points]
 
 
 class LinearizedSystem:
