@@ -33,10 +33,13 @@ class SysParams:
         self.ms_pt_distribution = 0
         self.outlet_boundary_type = 0
         self.void_frac_term = 0
+        self.dis_error = 0
+        self.ls_error = 0
+        self.time_stepping = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     append_helium=True,
-                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False,
+                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
@@ -49,7 +52,9 @@ class SysParams:
         :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
-        :param outlet_boundary_type: Specify the type of the outlet boundary.
+        :param outlet_boundary_type: String that specifies the type of the outlet boundary.
+        :param dimensionless: Boolean that specifies whether dimensionless numbers are used.
+        :param time_stepping: String that specifies the time of stepping methods.
         :param y_in: Array containing mole fractions at the start.
         :param n_points: Number of grid points.
         :param p_in: Total pressure at the inlet.
@@ -135,6 +140,16 @@ class SysParams:
         self.outlet_boundary_type = outlet_boundary_type
         if self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
+
+        # Determine the magnitude of errors
+        self.time_stepping = time_stepping
+        if self.time_stepping == ("BE" or "FE"):
+            self.dis_error = np.max(self.dz**2, self.dt)
+        elif self.time_stepping == "CN":
+            self.dis_error = np.max(self.dz**2, self.dt**2)
+        else:
+            raise Warning("Only FE, BE, CN methods can be used!")
+        self.ls_error = self.dis_error/100
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -247,7 +262,7 @@ class MMS:
             self.dnupi_dz_matrix[:, i] = np.copy(self.dnupi_dz)
             # Update MS time derivative of p_i
             self.calculate_dpi_dt_ms(i)
-            self.dpi_dt_matrix[:, 1] = np.copy(self.dpi_dt)
+            self.dpi_dt_matrix[:, i] = np.copy(self.dpi_dt)
         self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
         self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__solver.disp_matrix
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
@@ -387,11 +402,10 @@ class Solver:
         : Matrix containing partial pressures at each grid point
         :return: True if the pressures sum up to 1, false otherwise
         """
-        p_summed = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            return np.allclose(p_summed, self.MMS.pt, 1.e-3, 0)
+            return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
         else:
-            return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
+            return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
     def calculate_next_pressure(self, p_partial_old, dp_dt):
         """
@@ -409,8 +423,7 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        dq_ads_dt = np.multiply(self.kl_matrix, q_eq - q_ads)
-        return dq_ads_dt
+        return np.multiply(self.kl_matrix, q_eq - q_ads)
 
     def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
         """
@@ -431,7 +444,8 @@ class Solver:
         """
         if dp_dt is None:
             return False
-        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt, 1e-5)
+        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt,
+                           self.params.ls_error)
 
     def load_pyiast(self, partial_pressures):
 
