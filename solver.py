@@ -532,10 +532,14 @@ class LinearizedSystem:
         def be_stability_equation(u):
             return 1 / (1 - u)
 
+        def fe_stability_equation(u):
+            return 1 + u
+
         def stability_condition(dt, f):
             u = lambda_max * dt
             return np.absolute(f(u)) - 1
 
-        for (f_name, f) in (("RK4", rk4_stability_equation), ("BE", be_stability_equation)):
+        for (f_name, f) in (("RK4", rk4_stability_equation), ("BE", be_stability_equation),
+                            ("FE", fe_stability_equation)):
             dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1.0), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
