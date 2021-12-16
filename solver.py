@@ -39,7 +39,7 @@ class SysParams:
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     append_helium=True,
-                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", time_stepping="BE", dimensionless=True, mms=False,
+                    t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
@@ -137,8 +137,11 @@ class SysParams:
         self.n_components = self.y_in.shape[0]
 
         # Parameters for outlet boundary condition
-        self.outlet_boundary_type = outlet_boundary_type
-        if self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
+        if self.p_in == self.p_out:
+            self.outlet_boundary_type = "Numerical"
+        elif self.p_in != self.p_out:
+            self.outlet_boundary_type = "Neumann"
+        elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
 
         # Determine the magnitude of errors
@@ -488,7 +491,7 @@ class Solver:
         def backward_euler(u_new, u_old):
             return u_old + self.params.dt * calculate_dudt(u_new, t + self.params.dt) - u_new
 
-
+        # Create initial conditions
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial_initial[:, -1] = self.params.p_total
@@ -496,6 +499,7 @@ class Solver:
 
         t = 0
         du_dt = None
+        u_1 = None
 
         while (not self.check_steady_state(du_dt)) or t < self.params.t_end:
             if self.params.time_stepping == "BE":
