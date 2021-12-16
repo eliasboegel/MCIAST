@@ -21,7 +21,6 @@ def fit(data_list, skipheader=0, skipfooter=0):
 
     return isotherm_data
 
-
 def solve(partial_pressures, isotherm_data):
     # Allocate memory for calculation caches once and pass as parameter to avoid constant allocation/deallocation on every call of __func
     func_cache = np.empty(partial_pressures.shape[0], dtype=np.double)
