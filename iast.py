@@ -2,6 +2,26 @@ import scipy as sp
 import numpy as np
 np.set_printoptions(edgeitems=30, linewidth=1000)
 
+def fit(data_list, skipheader=0, skipfooter=0):
+    isotherm_data = np.empty((len(data_list),2), dtype=np.double)
+
+    def n(p, m, k): return m * k * p / (1 + k * p)
+
+    for i in range(len(data_list)):
+        data = np.genfromtxt(data_list[i], skip_header=2, delimiter=',')
+
+        initial_guess = [
+            1.1 * np.max(data[:,0]),
+            0.1
+        ]
+
+        vals = sp.optimize.curve_fit(n, data[:,0], data[:,1], p0=initial_guess, maxfev=1000, method='lm', xtol=1e-15, col_deriv=True)
+        #print(vals[0])
+        isotherm_data[i] = vals[0]
+
+    return isotherm_data
+
+
 def solve(partial_pressures, isotherm_data):
     # Allocate memory for calculation caches once and pass as parameter to avoid constant allocation/deallocation on every call of __func
     func_cache = np.empty(partial_pressures.shape[0], dtype=np.double)
@@ -15,7 +35,7 @@ def solve(partial_pressures, isotherm_data):
     uarr = uarr / np.sum(uarr)
 
     # Solve system
-    subsol = sp.optimize.root(__func, uarr[:-1], args=(isotherm_data, func_cache, pre_calc_kpress), method='lm').x
+    subsol = sp.optimize.root(__func, uarr[:-1], args=(isotherm_data, func_cache, pre_calc_kpress), method='lm', options={'xtol': 1e-15, 'col_deriv': True}).x
 
     uarr[:] = subsol
     uarr[-1] = 1 - np.sum(subsol)
