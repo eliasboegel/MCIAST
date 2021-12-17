@@ -82,9 +82,9 @@ class SysParams:
                 # 0 appended at the end for helium.
                 self.y_in = np.append(np.asarray(y_in), 0)
                 # Dimensionless mass transfer coefficients, with the coefficient of helium appended
-                self.kl = np.append(np.asarray(kl) * c_len / u_in, 0)
+                self.kl = np.append(np.asarray(kl) * c_len / u_in, 1e-5)
                 # Dimensionless dispersion coefficients, with the coefficient of helium appended
-                self.disp = np.append(np.asarray(disp) / (c_len * u_in), 1)
+                self.disp = np.append(np.asarray(disp) / (c_len * u_in), 0)
             else:
                 self.y_in = np.asarray(y_in)
                 self.kl = np.asarray(kl) * c_len / u_in
@@ -98,7 +98,7 @@ class SysParams:
             if append_helium:
                 self.y_in = np.append(np.asarray(y_in), 0)
                 self.kl = np.append(np.asarray(kl), 0)
-                self.disp = np.append(np.asarray(disp), 1)
+                self.disp = np.append(np.asarray(disp), 0)
             else:
                 self.y_in = np.asarray(y_in)
                 self.kl = np.asarray(kl)
@@ -360,11 +360,12 @@ class Solver:
         #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.dia_matrix(self.g_matrix)
-        print(self.g_matrix.toarray())
+        # print(self.g_matrix.toarray())
 
         self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
+        # print(f"f_matrix: {self.f_matrix}")
         self.f_matrix = sp.csr_matrix(self.f_matrix)
-        print(f"f_matrix: {self.f_matrix.toarray()}")
+        # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1) + np.diag(np.full(self.params.n_points - 1, -2.0), 0)
@@ -377,7 +378,7 @@ class Solver:
             self.l_matrix[-1, -1] = 2.0
         self.l_matrix /= self.params.dz ** 2
         self.l_matrix = sp.csr_matrix(self.l_matrix)
-        print(f"l_matrix {self.l_matrix.toarray()}")
+        # print(f"l_matrix {self.l_matrix.toarray()}")
 
         if self.params.mms is True:
             self.MMS = MMS(self.params, self)
@@ -403,13 +404,14 @@ class Solver:
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
         :param p_partial: Matrix containing partial pressures of all the components at every grid point.
         Each row represents different grid point.
-        :param p_total: Vector containing total pressures at each grid point.
         :param q_eq: Matrix containing equilibrium loadings of each component at each grid point.
         :param q_ads: Matrix containing average loadings in the
 
         :return: Array containing velocities at each grid point.
         """
-
+        #print(f"b_Vector: {self.b_vector}")
+        #print(f"g_matrix {self.g_matrix}")
+        #print(f"f_matrix: {self.f_matrix}")
         ldf = np.multiply(self.kl_matrix, q_eq - q_ads)
         lp = np.multiply(self.disp_matrix / (self.R * self.params.temp), self.l_matrix.dot(p_partial))
         component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
@@ -423,7 +425,9 @@ class Solver:
         else:
             rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector
         lhs = self.g_matrix + self.f_matrix
+        #print(f"lhs: {lhs}, rhs: {rhs}")
         velocities = sp.linalg.spsolve(lhs, rhs)
+        #print(velocities)
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -442,6 +446,7 @@ class Solver:
 
         m_matrix = np.multiply(velocities, p_partial)
 
+        #print(self.g_matrix, m_matrix)
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * \
@@ -508,11 +513,10 @@ class Solver:
 
         equilibrium_loadings = np.zeros(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            print(partial_pressures[i])
-            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]),
-                                                partial_pressures[i][-1])
+            # print(partial_pressures[i])
+            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]), 0)
 
-        print(f"Equilibrium loadings: {equilibrium_loadings}")
+        #print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
@@ -556,7 +560,7 @@ class Solver:
         du_dt = None
         u_1 = None
 
-        while (not self.check_steady_state(du_dt)) or t < self.params.t_end:
+        while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
             if self.params.time_stepping == "BE":
                 u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
             elif self.params.time_stepping == "FE":
