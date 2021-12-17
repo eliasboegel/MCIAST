@@ -1,9 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
-import pyiast
-import pandas as pd
-
+import iast
 
 
 class SysParams:
@@ -341,6 +339,9 @@ class Solver:
         # print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
+        self.isotherms = iast.fit(["/test_data/co2.csv", "/test_data/n2.csv"])
+        print(self.isotherms)
+
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
@@ -432,32 +433,6 @@ class Solver:
         return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt,
                            self.params.ls_error)
 
-    def load_pyiast(self, partial_pressures):
-
-        dirpath = os.path.abspath(os.path.dirname(__file__))
-
-        df_N2 = pd.read_csv(dirpath + "/test_data/n2.csv", skiprows=1)
-        N2_isotherm = pyiast.ModelIsotherm(df_N2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
-                                           model="Langmuir")
-
-        df_CO2 = pd.read_csv(dirpath + "/test_data/co2.csv", skiprows=1)
-        CO2_isotherm = pyiast.ModelIsotherm(df_CO2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
-                                            model="Langmuir")
-
-        isotherms = np.array([
-            [N2_isotherm.params['M'] * N2_isotherm.params['K'], N2_isotherm.params['K']],
-            [CO2_isotherm.params['M'] * CO2_isotherm.params['K'], CO2_isotherm.params['K']]
-        ])
-
-        equilibrium_loadings = np.zeros(partial_pressures.shape)
-        for i in range(partial_pressures.shape[0]):
-            print(partial_pressures[i])
-            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]),
-                                                partial_pressures[i][-1])
-
-        print(f"Equilibrium loadings: {equilibrium_loadings}")
-        return equilibrium_loadings
-
     def solve(self):
 
         # Create functions to be called in the main loop
@@ -471,7 +446,7 @@ class Solver:
                 q_eq = self.MMS.q_eq_matrix
             # Calculate new loadings
             else:
-                q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+                q_eq = iast.solve(p_partial, self.isotherms)
             # Calculate loading derivative
             dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
             # Calculate new velocity
