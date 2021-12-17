@@ -274,6 +274,63 @@ class MMS:
                                           self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.pt
 
 
+class OoA:
+    def __init__(self, which, n):
+        self.n = n
+        self.type = which
+        if self.type != "Space" or self.type != "Time":
+            raise Warning("which of OoM must be either Space or Time")
+
+    def analysis(self):
+        nodes_list = [self.n, 2*self.n, 3*self.n]
+        error_list = []
+        params = SysParams()
+        for nodes in nodes_list:
+            error_matrix = None
+            if self.type == "Space":
+                params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
+                                   temp=313,  c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
+                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                solver = Solver(params)
+                solver.MMS.update_source_functions(0)
+                dp_dt_manufactured = solver.MMS.dpi_dt_matrix
+
+                q_ads = solver.MMS.q_ads_matrix
+                p_partial = solver.MMS.pi_matrix
+                u = np.concatenate((p_partial, q_ads), axis=1)
+                du_dt_calc = solver.calculate_dudt(u, 0)
+                dp_dt_calc = du_dt_calc[0, nodes]
+
+                error_matrix = dp_dt_calc - dp_dt_manufactured
+
+            elif self.type == "Time":
+                params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
+                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
+                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
+                solver = Solver(params)
+
+                p_i_calc = solver.solve()
+
+                params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
+                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
+                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                solver = Solver(params)
+
+                solver.MMS.update_source_functions(0)
+                p_i_manufactured = solver.MMS.pi_matrix
+
+                error_matrix = p_i_calc - p_i_manufactured
+
+            error_norm_i = np.sqrt(np.mean(error_matrix**2, axis=0))
+            error_norm = np.sqrt(np.mean(error_norm_i**2))
+            error_list.append(error_norm)
+
+        OoA = np.log((error_list[2] - error_list[1])/(error_list[1] - error_list[0]))/np.log(2)
+        return OoA, error_list, nodes_list
+
 class Solver:
     # Gas constant
     R = 8.314
@@ -458,38 +515,36 @@ class Solver:
         print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
+    def calculate_dudt(self, u, time):
+        # Disassemble solution matrix
+        p_partial = u[0:self.params.n_points]
+        q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
+        # Update source functions if MMS is used and get new loadings then
+        if self.params.mms is True:
+            self.MMS.update_source_functions(time)
+            q_eq = self.MMS.q_eq_matrix
+        # Calculate new loadings
+        else:
+            q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+        # Calculate loading derivative
+        dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
+        # Calculate new velocity
+        v = self.calculate_velocities(p_partial, q_eq, q_ads)
+        # Calculate new partial pressures derivative
+        dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
+        # Assemble and return solution gradient matrix
+        return np.concatenate((dp_dt, dq_ads_dt), axis=1)
+
     def solve(self):
-
-        # Create functions to be called in the main loop
-        def calculate_dudt(u, time):
-            # Disassemble solution matrix
-            p_partial = u[0:self.params.n_points]
-            q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
-            # Update source functions if MMS is used and get new loadings then
-            if self.params.mms is True:
-                self.MMS.update_source_functions(time)
-                q_eq = self.MMS.q_eq_matrix
-            # Calculate new loadings
-            else:
-                q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
-            # Calculate loading derivative
-            dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-            # Calculate new velocity
-            v = self.calculate_velocities(p_partial, q_eq, q_ads)
-            # Calculate new partial pressures derivative
-            dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-            # Assemble and return solution gradient matrix
-            return np.concatenate((dp_dt, dq_ads_dt), axis=1)
-
         def crank_nicolson(u_new, u_old):
-            return u_old + 0.5 * self.params.dt * (calculate_dudt(u_new, t + self.params.dt) +
-                                                   calculate_dudt(u_old, t)) - u_new
+            return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, t + self.params.dt) +
+                                                   self.calculate_dudt(u_old, t)) - u_new
 
         def forward_euler(u_old):
-            return u_old + self.params.dt * calculate_dudt(u_old, t)
+            return u_old + self.params.dt * self.calculate_dudt(u_old, t)
 
         def backward_euler(u_new, u_old):
-            return u_old + self.params.dt * calculate_dudt(u_new, t + self.params.dt) - u_new
+            return u_old + self.params.dt * self.calculate_dudt(u_new, t + self.params.dt) - u_new
 
         # Create initial conditions
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
@@ -511,8 +566,6 @@ class Solver:
 
             if not self.verify_pressures(u_1[0:self.params.n_points]):
                 print("The sum of partial pressures is not equal to 1!")
-
-            # Add something for plotting here
 
             # Calculate derivative to check convergance
             du_dt = (u_1 - u_0)/self.params.dt
