@@ -100,3 +100,13 @@ class TestSolver(unittest.TestCase):
         #ls = LinearizedSystem(solver, params)
         #ls.get_estimated_dt()
         solver.solve()
+
+    def test_Linearized_Class(self):
+        params = SysParams()
+        params.init_params(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=1000, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True,
+                           p_out=5.0)
+        solver = Solver(params)
+        lin_sys = LinearizedSystem(solver, params)
+        lin_sys.get_stiffness_estimate()
+        lin_sys.get_estimated_dt()

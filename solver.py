@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.optimize as opt
 import pyiast
 import pandas as pd
-import os
+
 
 
 class SysParams:
@@ -33,10 +33,13 @@ class SysParams:
         self.ms_pt_distribution = 0
         self.outlet_boundary_type = 0
         self.void_frac_term = 0
+        self.dis_error = 0
+        self.ls_error = 0
+        self.time_stepping = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     append_helium=True,
-                    t_end=40, dt=0.001, outlet_boundary_type="Neumann", dimensionless=True, mms=False,
+                    t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
@@ -49,7 +52,9 @@ class SysParams:
         :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
-        :param outlet_boundary_type: Specify the type of the outlet boundary.
+        :param outlet_boundary_type: String that specifies the type of the outlet boundary.
+        :param dimensionless: Boolean that specifies whether dimensionless numbers are used.
+        :param time_stepping: String that specifies the time of stepping methods.
         :param y_in: Array containing mole fractions at the start.
         :param n_points: Number of grid points.
         :param p_in: Total pressure at the inlet.
@@ -132,9 +137,22 @@ class SysParams:
         self.n_components = self.y_in.shape[0]
 
         # Parameters for outlet boundary condition
-        self.outlet_boundary_type = outlet_boundary_type
-        if self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
+        if self.p_in == self.p_out:
+            self.outlet_boundary_type = "Numerical"
+        elif self.p_in != self.p_out:
+            self.outlet_boundary_type = "Neumann"
+        elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
+
+        # Determine the magnitude of errors
+        self.time_stepping = time_stepping
+        if self.time_stepping == ("BE" or "FE"):
+            self.dis_error = np.max(self.dz**2, self.dt)
+        elif self.time_stepping == "CN":
+            self.dis_error = np.max(self.dz**2, self.dt**2)
+        else:
+            raise Warning("Only FE, BE, CN methods can be used!")
+        self.ls_error = self.dis_error/100
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -247,7 +265,7 @@ class MMS:
             self.dnupi_dz_matrix[:, i] = np.copy(self.dnupi_dz)
             # Update MS time derivative of p_i
             self.calculate_dpi_dt_ms(i)
-            self.dpi_dt_matrix[:, 1] = np.copy(self.dpi_dt)
+            self.dpi_dt_matrix[:, i] = np.copy(self.dpi_dt)
         self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
         self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__solver.disp_matrix
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
@@ -275,23 +293,22 @@ class Solver:
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points - 1, self.params.n_components))
 
-        # Total pressure vector as column
-        self.p_t_column = self.params.p_total.reshape((-1, 1))
-
         # System matrices
         self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1)
         self.g_matrix[-1, -3] = 1.0
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
-        print(self.g_matrix)
-        print(self.params.dz)
+        #print(self.g_matrix)
+        #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.dia_matrix(self.g_matrix)
         print(self.g_matrix.toarray())
 
-        self.f_matrix = sp.diags(self.params.dp_dz / self.params.p_total)
+        self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
+        self.f_matrix = sp.csr_matrix(self.f_matrix)
         print(f"f_matrix: {self.f_matrix.toarray()}")
+
         self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1) + np.diag(np.full(self.params.n_points - 1, -2.0), 0)
         if self.params.outlet_boundary_type == "Neumann":
@@ -302,7 +319,7 @@ class Solver:
             self.l_matrix[-1, -2] = -5.0
             self.l_matrix[-1, -1] = 2.0
         self.l_matrix /= self.params.dz ** 2
-        self.l_matrix = sp.dia_matrix(self.l_matrix)
+        self.l_matrix = sp.csr_matrix(self.l_matrix)
         print(f"l_matrix {self.l_matrix.toarray()}")
 
         if self.params.mms is True:
@@ -321,7 +338,7 @@ class Solver:
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
         self.b_vector = np.zeros(self.params.n_points - 1)
-        print(self.b_vector)
+        # print(self.b_vector)
         self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
     def calculate_velocities(self, p_partial, q_eq, q_ads):
@@ -343,7 +360,7 @@ class Solver:
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -self.R * self.params.temp * component_sums / self.p_t_column - self.b_vector + \
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector + \
                   self.MMS.S_nu
 
         else:
@@ -370,8 +387,8 @@ class Solver:
 
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
-        adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * np.multiply(self.kl_matrix, q_eq - q_ads) + \
-                          self.d_matrix
+        adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * \
+                          np.multiply(self.kl_matrix, q_eq - q_ads) + self.d_matrix
 
         if self.params.mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
@@ -388,20 +405,10 @@ class Solver:
         : Matrix containing partial pressures at each grid point
         :return: True if the pressures sum up to 1, false otherwise
         """
-        p_summed = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            return np.allclose(p_summed, self.MMS.pt, 1.e-3, 0)
+            return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
         else:
-            return np.allclose(p_summed, self.params.p_total, 1.e-3, 0)
-
-    def calculate_next_pressure(self, p_partial_old, dp_dt):
-        """
-        Steps in time to calculate the partial pressures of each component in the next point of time.
-        :param p_partial_old: Matrix containing old partial pressures.
-        :param dp_dt: Matrix containing time derivatives of partial pressures of each component at each grid point.
-        :return: Matrix containing new partial pressures.
-        """
-        return p_partial_old + self.params.dt * dp_dt
+            return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
@@ -410,17 +417,7 @@ class Solver:
         :param q_ads: Array containing average component loadings in the adsorbent
         :return: Matrix containing time derivatives of average component loadings in the adsorbent at each point.
         """
-        dq_ads_dt = np.multiply(self.kl_matrix, q_eq - q_ads)
-        return dq_ads_dt
-
-    def calculate_next_q_ads(self, q_ads_old, dq_ads_dt):
-        """
-        Steps in time to calculate the average loadings in the adsorbent of each component in the next point of time.
-        :param q_ads_old: Matrix containing old average loadings.
-        :param dq_ads_dt: Matrix containing time derivatives of average loadings of each component at each grid point.
-        :return: Matrix containing new average loadings.
-        """
-        return q_ads_old + self.params.dt * dq_ads_dt
+        return np.multiply(self.kl_matrix, q_eq - q_ads)
 
     def check_steady_state(self, dp_dt):
         """
@@ -432,7 +429,8 @@ class Solver:
         """
         if dp_dt is None:
             return False
-        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt, 1e-5)
+        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt,
+                           self.params.ls_error)
 
     def load_pyiast(self, partial_pressures):
 
@@ -462,38 +460,70 @@ class Solver:
 
     def solve(self):
 
-        q_ads = np.zeros((self.params.n_points - 1, self.params.n_components))
-
-        p_partial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
-        p_partial[:, -1] = self.params.p_total
-
-        t = 0
-        dp_dt = None
-
-        while (not self.check_steady_state(dp_dt)) or t < self.params.t_end:
+        # Create functions to be called in the main loop
+        def calculate_dudt(u, time):
+            # Disassemble solution matrix
+            p_partial = u[0:self.params.n_points]
+            q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
             # Update source functions if MMS is used and get new loadings then
             if self.params.mms is True:
-                self.MMS.update_source_functions(t)
+                self.MMS.update_source_functions(time)
                 q_eq = self.MMS.q_eq_matrix
             # Calculate new loadings
             else:
                 q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            # Calculate loading derivative
             dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-            q_ads = self.calculate_next_q_ads(q_ads, dq_ads_dt)
             # Calculate new velocity
             v = self.calculate_velocities(p_partial, q_eq, q_ads)
-
-            # Calculate new partial pressures
+            # Calculate new partial pressures derivative
             dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-            p_partial = self.calculate_next_pressure(p_partial, dp_dt)
-            if not self.verify_pressures(p_partial):
+            # Assemble and return solution gradient matrix
+            return np.concatenate((dp_dt, dq_ads_dt), axis=1)
+
+        def crank_nicolson(u_new, u_old):
+            return u_old + 0.5 * self.params.dt * (calculate_dudt(u_new, t + self.params.dt) +
+                                                   calculate_dudt(u_old, t)) - u_new
+
+        def forward_euler(u_old):
+            return u_old + self.params.dt * calculate_dudt(u_old, t)
+
+        def backward_euler(u_new, u_old):
+            return u_old + self.params.dt * calculate_dudt(u_new, t + self.params.dt) - u_new
+
+        # Create initial conditions
+        q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
+        p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
+        p_partial_initial[:, -1] = self.params.p_total
+        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=1)
+
+        t = 0
+        du_dt = None
+        u_1 = None
+
+        while (not self.check_steady_state(du_dt)) or t < self.params.t_end:
+            if self.params.time_stepping == "BE":
+                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+            elif self.params.time_stepping == "FE":
+                u_1 = forward_euler(u_0)
+            elif self.params.time_stepping == "CN":
+                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+
+            if not self.verify_pressures(u_1[0:self.params.n_points]):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Add something for plotting here
 
+            # Calculate derivative to check convergance
+            du_dt = (u_1 - u_0)/self.params.dt
+
+            # Update time
             t += self.params.dt
 
-        return p_partial
+            # Initialize variables for the next time step
+            u_0 = u_1
+
+        return u_1[0:self.params.n_points]
 
 
 class LinearizedSystem:
@@ -503,15 +533,14 @@ class LinearizedSystem:
 
     def get_lin_sys_matrix(self, peclet_magnitude):
         # Calculate LHS matrix
-        print(f"g_matrix: {self.solver.g_matrix.toarray()}")
-        print(f"f_matrix: {self.solver.f_matrix.toarray()}")
-        lhs = self.solver.g_matrix + self.solver.f_matrix
+        # lhs = self.solver.g_matrix + self.solver.f_matrix
         # Calculate RHS matrix
-        rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.solver.p_t_column
+        # rhs = self.solver.l_matrix.dot(self.params.p_total / peclet_magnitude) / self.params.p_total
         # Solve for nu approximation
-        nu = sp.linalg.spsolve(lhs, rhs)
+        # nu = sp.linalg.spsolve(lhs, rhs)
         # Create linearized system matrix
-        a_matrix = -self.solver.g_matrix.multiply(nu.reshape((-1, 1))) + self.solver.l_matrix / peclet_magnitude
+        # a_matrix = -self.solver.g_matrix.multiply(nu.reshape((-1, 1))) + self.solver.l_matrix / peclet_magnitude
+        a_matrix = -self.solver.g_matrix + self.solver.l_matrix / peclet_magnitude
         return a_matrix
 
     def get_stiffness_estimate(self):
@@ -519,25 +548,29 @@ class LinearizedSystem:
                                                   ("smallest Peclet number", 1 / np.max(self.params.disp)),
                                                   ("average Peclet number", 1 / np.mean(self.params.disp))):
             a_matrix = self.get_lin_sys_matrix(peclet_magnitude)
-            lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
-            lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM")
+            lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM", return_eigenvectors=False)[0]
+            lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM", return_eigenvectors=False)[0]
             stiffness = np.absolute(lambda_max / lambda_min)
             print(f"Stiffness of linearized system matrix for {peclet_number} is {stiffness}")
 
     def get_estimated_dt(self):
         a_matrix = self.get_lin_sys_matrix(1 / np.max(self.params.disp))
-        lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM")
+        lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM", return_eigenvectors=False)[0]
 
         def rk4_stability_equation(u):
-            return 1 + u + u ** 2 / 2 + u ** 3 / 6 + u ** 4 / 24
+            return 1 + u + (u ** 2) / 2 + (u ** 3) / 6 + (u ** 4) / 24
 
-        def fe_stability_equation(u):
+        def be_stability_equation(u):
             return 1 / (1 - u)
 
-        def stability_condition(f, dt):
+        def fe_stability_equation(u):
+            return 1 + u
+
+        def stability_condition(dt, f):
             u = lambda_max * dt
             return np.absolute(f(u)) - 1
 
-        for (f_name, f) in (("RK4", rk4_stability_equation), ("FE", fe_stability_equation)):
-            dt = opt.fsolve(func=stability_condition, x0=np.array(0.0), maxfev=1000)
+        for (f_name, f) in (("RK4", rk4_stability_equation), ("BE", be_stability_equation),
+                            ("FE", fe_stability_equation)):
+            dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1.0), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
