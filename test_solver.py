@@ -10,13 +10,14 @@ class TestSolver(unittest.TestCase):
     def test_initialize_params_correct(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False)
-        self.assertEqual(params.t_end, 4)
+                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False,
+                           dimensionless=False)
+        self.assertEqual(params.t_end, 8)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
         self.assertEqual(params.p_in, 5.0)
         self.assertEqual(params.p_out, 5.0)
-        np.testing.assert_array_equal(params.p_total, [5.0]*11)
+        np.testing.assert_array_equal(params.p_total, [5.0] * 11)
         self.assertEqual(params.n_points, 11)
         np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8]))
         self.assertEqual(params.temp, 313)
@@ -34,8 +35,9 @@ class TestSolver(unittest.TestCase):
         n_points = 3
         n_components = 2
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium= False)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=4, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False,
+                           dimensionless=False, p_out=5.0)
         solver = Solver(params)
         print("Matrix G: ", solver.g_matrix)
         print("Matrix L: ", solver.l_matrix)
@@ -57,13 +59,14 @@ class TestSolver(unittest.TestCase):
         Case in which kl and disp are identical for each component and equal to 1.
         """
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=4, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False,
+                           dimensionless=False, p_out=5.0)
         solver = Solver(params)
 
-        dp_dt = solver.calculate_dp_dt(np.asarray([2, 1]), np.asarray([[0.35, 0.6], [0.4, 0.6]]),
-                                       np.asarray([[3, 4], [2, 2]]),
-                                       np.asarray([[2, 3], [1, 1]]))
+        dp_dt = solver.calculate_dp_dt(np.asarray([2, 1, 1]), np.asarray([[0.35, 0.6], [0.4, 0.6], [0.5, 0.2]]),
+                                       np.asarray([[3, 4], [2, 2], [2, 2]]),
+                                       np.asarray([[2, 3], [1, 1], [1, 1]]))
         # Use this to test in Wolfram Alpha
         # -(Divide[1,0.25])*{{0,1,0},{-1,0,1},{1,-4,3}}{{0.3,0.7},{0.7,1.3},{0.4,0.6}}+(Divide[1,0.25])*{{-2,1,0},
         # {1,-2,1},{0,2,-2}}{{0.3,0.7},{0.35,0.65},{0.4,0.6}}- Divide[\(40)1-0.6\(41),0.6]*2*8.314*313
@@ -77,13 +80,14 @@ class TestSolver(unittest.TestCase):
         Case in which kl and disp are identical for each component and equal to 1.
         """
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=3, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2, append_helium=False)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=4, p_in=5.0, temp=313,
+                           c_len=1, u_in=1, void_frac=0.995, disp=[0, 0], kl=[5, 5], rho_p=2, append_helium=True,
+                           dimensionless=False, p_out=5.0)
         solver = Solver(params)
 
-        velocities = solver.calculate_velocities(np.asarray([[0.35, 0.65], [0.4, 0.6]]),
-                                                 np.asarray([[3, 4], [2, 2]]),
-                                                 np.asarray([[2, 3], [1, 1]]))
+        velocities = solver.calculate_velocities(np.asarray([[0.35, 0.65, 1], [0.1, 0.2, 1], [0.1, 0.3, 1]]),
+                                                 np.asarray([[0.02, 0.05, 0], [0.2, 0.2, 0], [0.3, 0.3, 0]]),
+                                                 np.asarray([[0.01, 0.03, 0], [0.05, 0.04, 0], [0.25, 0.25, 0]]))
 
         # The summed up term can be calculate using Wolfram Alpha with input:
         # Divide[\(40)1-0.6\(41),0.6]*2* ({{1,2},{3,4},{2,2}}-{{0.5,1.5},{2,3},{1,1}})-Divide[1,8.314*313]
@@ -93,18 +97,18 @@ class TestSolver(unittest.TestCase):
 
     def test_solve_function(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=5, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True,
-                           p_out=3.0)
+        params.init_params(t_end=1e-4, dt=1e-7, y_in=np.asarray([0.5, 0.5]), n_points=5, p_in=1000, temp=313,
+                           c_len=1, u_in=1, void_frac=0.995, disp=[0, 0], kl=[5, 5], rho_p=500, append_helium=True,
+                           p_out=5000, dimensionless=True)
         solver = Solver(params)
-        print(f"Printing in the test: {solver.f_matrix.toarray()}")
-        #ls = LinearizedSystem(solver, params)
-        #ls.get_estimated_dt()
-        solver.solve()
+        # ls = LinearizedSystem(solver, params)
+        # ls.get_estimated_dt()
+        p_partial_results = solver.solve()
+        print(p_partial_results)
 
     def test_Linearized_Class(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.0001, y_in=np.asarray([0.2, 0.8]), n_points=1000, p_in=5.0, temp=313,
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=1000, p_in=5.0, temp=313,
                            c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True,
                            p_out=5.0)
         solver = Solver(params)
