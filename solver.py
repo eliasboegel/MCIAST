@@ -160,6 +160,8 @@ class SysParams:
             self.mms_mode = mms_mode
             self.mms_conv_factor = mms_convergence_factor
             self.ms_pt_distribution = ms_pt_distribution
+            if dimensionless is False:
+                raise Warning("mms must be initialized with dimensionless set to True")
         if type(self.mms) != bool:
             raise Warning("mms must be either True or False")
 
