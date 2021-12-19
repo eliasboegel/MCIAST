@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import scipy.optimize as opt
 import pyiast
 import pandas as pd
-
+import os
 
 
 class SysParams:
@@ -147,9 +147,9 @@ class SysParams:
         # Determine the magnitude of errors
         self.time_stepping = time_stepping
         if self.time_stepping == ("BE" or "FE"):
-            self.dis_error = np.max(self.dz**2, self.dt)
+            self.dis_error = max(self.dz**2, self.dt)
         elif self.time_stepping == "CN":
-            self.dis_error = np.max(self.dz**2, self.dt**2)
+            self.dis_error = max(self.dz**2, self.dt**2)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
         self.ls_error = self.dis_error/100
@@ -558,11 +558,11 @@ class Solver:
 
         while (not self.check_steady_state(du_dt)) or t < self.params.t_end:
             if self.params.time_stepping == "BE":
-                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), xin=u_0, f_tol=self.params.ls_error)
             elif self.params.time_stepping == "FE":
                 u_1 = forward_euler(u_0)
             elif self.params.time_stepping == "CN":
-                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), x_in=u_0, f_tol=self.params.ls_error)
+                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
 
             if not self.verify_pressures(u_1[0:self.params.n_points]):
                 print("The sum of partial pressures is not equal to 1!")
