@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
-import iast
+import iast, os
 
 
 class SysParams:
@@ -163,6 +163,8 @@ class SysParams:
         if type(self.mms) != bool:
             raise Warning("mms must be either True or False")
 
+        dirpath = os.path.abspath(os.path.dirname(__file__))
+        self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
 
 class MMS:
     def __init__(self, sys_params, solver):
@@ -495,42 +497,26 @@ class Solver:
         return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt,
                            self.params.ls_error)
 
-    def load_pyiast(self, partial_pressures):
-
-        dirpath = os.path.abspath(os.path.dirname(__file__))
-
-        df_N2 = pd.read_csv(dirpath + "/test_data/n2.csv", skiprows=1)
-        N2_isotherm = pyiast.ModelIsotherm(df_N2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
-                                           model="Langmuir")
-
-        df_CO2 = pd.read_csv(dirpath + "/test_data/co2.csv", skiprows=1)
-        CO2_isotherm = pyiast.ModelIsotherm(df_CO2, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
-                                            model="Langmuir")
-
-        isotherms = np.array([
-            [N2_isotherm.params['M'] * N2_isotherm.params['K'], N2_isotherm.params['K']],
-            [CO2_isotherm.params['M'] * CO2_isotherm.params['K'], CO2_isotherm.params['K']]
-        ])
-
-        equilibrium_loadings = np.zeros(partial_pressures.shape)
+    def apply_iast(self, partial_pressures):
+        equilibrium_loadings = np.empty(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            # print(partial_pressures[i])
-            equilibrium_loadings[i] = np.append(pyiast.iast(partial_pressures[i][0:-1], [N2_isotherm, CO2_isotherm]), 0)
-
+            print(partial_pressures[i])
+            equilibrium_loadings[i,:-1] = iast.solve(partial_pressures[i,:-1], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
+        print(equilibrium_loadings)
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
         # Disassemble solution matrix
-        p_partial = u[0:self.params.n_points]
-        q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
+        p_partial = u[:self.params.n_points - 1]
+        q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 1]
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
-            q_eq = self.MMS.q_eq_matrix
+            #q_eq = self.MMS.q_eq_matrix
         # Calculate new loadings
         else:
-            q_eq = self.load_pyiast(p_partial)  # Call the IAST (pyiast for now)
+            q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
         # Calculate new velocity
@@ -538,7 +524,7 @@ class Solver:
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
         # Assemble and return solution gradient matrix
-        return np.concatenate((dp_dt, dq_ads_dt), axis=1)
+        return np.concatenate((dp_dt, dq_ads_dt), axis=0)
 
     def solve(self):
         def crank_nicolson(u_new, u_old):
@@ -555,7 +541,7 @@ class Solver:
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial_initial[:, -1] = self.params.p_total
-        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=1)
+        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
 
         t = 0
         du_dt = None
