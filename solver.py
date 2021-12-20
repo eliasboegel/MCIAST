@@ -1,9 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
-import pyiast
-import pandas as pd
-import os
+import iast
 
 
 class SysParams:
@@ -406,6 +404,7 @@ class Solver:
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
         :param p_partial: Matrix containing partial pressures of all the components at every grid point.
         Each row represents different grid point.
+        :param p_total: Vector containing total pressures at each grid point.
         :param q_eq: Matrix containing equilibrium loadings of each component at each grid point.
         :param q_ads: Matrix containing average loadings in the
 
