@@ -523,8 +523,10 @@ class Solver:
 
     def calculate_dudt(self, u, time):
         # Disassemble solution matrix
-        p_partial = u[0:self.params.n_points]
-        q_ads = u[self.params.n_points: 2 * self.params.n_points - 1]
+        p_partial = u[0:self.params.n_points-1]
+        q_ads = u[self.params.n_points-1: 2 * self.params.n_points - 1]
+        print(p_partial.shape)
+        print(q_ads.shape)
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
@@ -539,7 +541,7 @@ class Solver:
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
         # Assemble and return solution gradient matrix
-        return np.concatenate((dp_dt, dq_ads_dt), axis=1)
+        return np.concatenate((dp_dt, dq_ads_dt), axis=0)
 
     def solve(self):
         def crank_nicolson(u_new, u_old):
@@ -556,7 +558,7 @@ class Solver:
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
         p_partial_initial[:, -1] = self.params.p_total
-        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=1)
+        u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
 
         t = 0
         du_dt = None
@@ -582,7 +584,7 @@ class Solver:
             # Initialize variables for the next time step
             u_0 = u_1
 
-        return u_1[0:self.params.n_points]
+        return u_1[0:self.params.n_points-1]
 
 
 class LinearizedSystem:
