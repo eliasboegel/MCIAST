@@ -144,7 +144,7 @@ class SysParams:
 
         # Determine the magnitude of errors
         self.time_stepping = time_stepping
-        if self.time_stepping == ("BE" or "FE"):
+        if self.time_stepping == "BE" or self.time_stepping == "FE":
             self.dis_error = max(self.dz**2, self.dt)
         elif self.time_stepping == "CN":
             self.dis_error = max(self.dz**2, self.dt**2)
@@ -333,6 +333,7 @@ class OoA:
         OoA = np.log((error_list[2] - error_list[1])/(error_list[1] - error_list[0]))/np.log(2)
         return OoA, error_list, nodes_list
 
+
 class Solver:
     # Gas constant
     R = 8.314
@@ -494,22 +495,21 @@ class Solver:
         """
         if dp_dt is None:
             return False
-        return np.allclose(np.zeros(shape=(self.params.n_points - 1, self.params.n_components)), dp_dt,
+        return np.allclose(np.zeros(shape=(2 * self.params.n_points - 2, self.params.n_components)), dp_dt,
                            self.params.ls_error)
 
     def apply_iast(self, partial_pressures):
         equilibrium_loadings = np.empty(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            print(partial_pressures[i])
-            equilibrium_loadings[i,:-1] = iast.solve(partial_pressures[i,:-1], self.params.isotherms)
+            equilibrium_loadings[i, :-1] = iast.solve(partial_pressures[i, :-1], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
-        print(equilibrium_loadings)
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
+        print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
-        q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 1]
+        q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
@@ -519,12 +519,17 @@ class Solver:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
+        print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
+        print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
+        print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
-        return np.concatenate((dp_dt, dq_ads_dt), axis=0)
+        du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
+        print("du_dt matrix is:", du_dt)
+        return du_dt
 
     def solve(self):
         def crank_nicolson(u_new, u_old):
@@ -555,7 +560,7 @@ class Solver:
             elif self.params.time_stepping == "CN":
                 u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
 
-            if not self.verify_pressures(u_1[0:self.params.n_points]):
+            if not self.verify_pressures(u_1[0:self.params.n_points-1]):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Calculate derivative to check convergance
@@ -567,7 +572,7 @@ class Solver:
             # Initialize variables for the next time step
             u_0 = u_1
 
-        return u_1[0:self.params.n_points]
+        return u_1[0:self.params.n_points-1]
 
 
 class LinearizedSystem:
