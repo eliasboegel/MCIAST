@@ -80,7 +80,7 @@ class SysParams:
                 # 0 appended at the end for helium.
                 self.y_in = np.append(np.asarray(y_in), 0)
                 # Dimensionless mass transfer coefficients, with the coefficient of helium appended
-                self.kl = np.append(np.asarray(kl) * c_len / u_in, 1e-5)
+                self.kl = np.append(np.asarray(kl) * c_len / u_in, 0)
                 # Dimensionless dispersion coefficients, with the coefficient of helium appended
                 self.disp = np.append(np.asarray(disp) / (c_len * u_in), 0)
             else:
@@ -136,9 +136,9 @@ class SysParams:
 
         # Parameters for outlet boundary condition
         if self.p_in == self.p_out:
-            self.outlet_boundary_type = "Numerical"
-        elif self.p_in != self.p_out:
             self.outlet_boundary_type = "Neumann"
+        elif self.p_in != self.p_out:
+            self.outlet_boundary_type = "Numerical"
         elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
 
@@ -349,9 +349,11 @@ class Solver:
 
         # Dimensionless mass transfer coefficients matrix
         self.kl_matrix = np.broadcast_to(self.params.kl, (self.params.n_points - 1, self.params.n_components))
+        print("kl_matrix is", self.kl_matrix)
 
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.params.disp, (self.params.n_points - 1, self.params.n_components))
+        print("disp_matrix is", self.disp_matrix)
 
         # System matrices
         self.g_matrix = np.diag(np.full(self.params.n_points - 2, -1.0), -1) + np.diag(
@@ -359,6 +361,7 @@ class Solver:
         self.g_matrix[-1, -3] = 1.0
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
+        print("initial g_matrix is", self.g_matrix)
         #print(self.g_matrix)
         #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
@@ -379,6 +382,7 @@ class Solver:
             self.l_matrix[-1, -3] = 4.0
             self.l_matrix[-1, -2] = -5.0
             self.l_matrix[-1, -1] = 2.0
+        print("initial l_matrix is", self.l_matrix)
         self.l_matrix /= self.params.dz ** 2
         self.l_matrix = sp.csr_matrix(self.l_matrix)
         # print(f"l_matrix {self.l_matrix.toarray()}")
@@ -393,7 +397,7 @@ class Solver:
             v_in = self.params.v_in
 
         self.d_matrix = np.zeros((self.params.n_points - 1, self.params.n_components), dtype="float")
-        first_row = p_partial_in / (self.R * self.params.temp) * (
+        first_row = p_partial_in * (
                 (v_in / (2 * self.params.dz)) + (self.params.disp / (self.params.dz ** 2)))
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
@@ -506,7 +510,7 @@ class Solver:
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
-        print("u_old is:", u)
+        #print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
         q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
@@ -519,16 +523,16 @@ class Solver:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        print("dq_ads_dt matrix is:", dq_ads_dt)
+        #print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        print("v vector is:", v)
+        #print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        print("dp_dt matrix is:", dp_dt)
+        #print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
         du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
-        print("du_dt matrix is:", du_dt)
+        #print("du_dt matrix is:", du_dt)
         return du_dt
 
     def solve(self):

@@ -97,9 +97,9 @@ class TestSolver(unittest.TestCase):
 
     def test_solve_function(self):
         params = SysParams()
-        params.init_params(t_end=10000, dt=0.2, y_in=np.asarray([0.2, 0.8]), n_points=5, p_in=1000, temp=313,
-                           c_len=1, u_in=1, void_frac=0.995, disp=[0.5, 1], kl=[3, 5], rho_p=500, append_helium=True,
-                           p_out=500, time_stepping="BE", dimensionless=True)
+        params.init_params(t_end=10000, dt=0.1, y_in=np.asarray([0.5, 0.5]), n_points=10, p_in=2e5, temp=313,
+                           c_len=1, u_in=1, void_frac=0.995, disp=[250, 250], kl=[4.35, 1.47], rho_p=500,
+                           append_helium=True, p_out=1.9e5, time_stepping="BE", dimensionless=True)
         solver = Solver(params)
         # ls = LinearizedSystem(solver, params)
         # ls.get_estimated_dt()
