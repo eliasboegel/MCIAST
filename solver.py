@@ -133,7 +133,7 @@ class SysParams:
             self.dis_error = max(self.dz**2, self.dt**2)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error/100
+        self.ls_error = self.dis_error/1000
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -292,7 +292,7 @@ class OoA:
             elif self.type == "Time":
                 params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
                                    temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   time_stepping="BE", dimensionless=True, mms=True,
                                    ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
                 solver = Solver(params)
 
@@ -300,7 +300,7 @@ class OoA:
 
                 params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
                                    temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   time_stepping="BE", dimensionless=True, mms=True,
                                    ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
                 solver = Solver(params)
 
@@ -449,17 +449,17 @@ class Solver:
 
         return dp_dt
 
-    def verify_pressures(self, p_partial):
-        """
-        Verify if all partial pressures sum up to 1.
-        :param p_partial
-        : Matrix containing partial pressures at each grid point
-        :return: True if the pressures sum up to 1, false otherwise
-        """
-        if self.params.mms is True:
-            return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
-        else:
-            return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
+    # def verify_pressures(self, p_partial):
+    #     """
+    #     Verify if all partial pressures sum up to 1.
+    #     :param p_partial
+    #     : Matrix containing partial pressures at each grid point
+    #     :return: True if the pressures sum up to 1, false otherwise
+    #     """
+    #     if self.params.mms is True:
+    #         return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
+    #     else:
+    #         return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
@@ -484,9 +484,11 @@ class Solver:
                            self.params.ls_error)
 
     def apply_iast(self, partial_pressures):
-        equilibrium_loadings = np.empty(partial_pressures.shape)
+        equilibrium_loadings = np.zeros(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            equilibrium_loadings[i] = iast.solve(partial_pressures[i], self.params.isotherms)
+            if np.allclose(partial_pressures[i], np.zeros(self.params.n_components),
+                           atol=self.params.ls_error) is False:
+                equilibrium_loadings[i] = iast.solve(partial_pressures[i], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
@@ -543,9 +545,9 @@ class Solver:
                 u_1 = forward_euler(u_0)
             elif self.params.time_stepping == "CN":
                 u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
-
-            if not self.verify_pressures(u_1[0:self.params.n_points-1]):
-                print("The sum of partial pressures is not equal to 1!")
+            print("u_new is:", u_1)
+            # if not self.verify_pressures(u_1[0:self.params.n_points-1]):
+            #     print("The sum of partial pressures is not equal to 1!")
 
             # Calculate derivative to check convergance
             du_dt = (u_1 - u_0)/self.params.dt
@@ -554,7 +556,7 @@ class Solver:
             t += self.params.dt
 
             # Initialize variables for the next time step
-            u_0 = u_1
+            u_0 = np.copy(u_1)
 
         return u_1[0:self.params.n_points-1]
 
