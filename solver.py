@@ -128,9 +128,9 @@ class SysParams:
         # Determine the magnitude of errors
         self.time_stepping = time_stepping
         if self.time_stepping == "BE" or self.time_stepping == "FE":
-            self.dis_error = max(self.dz**2, self.dt)
-        elif self.time_stepping == "CN":
             self.dis_error = max(self.dz**2, self.dt**2)
+        elif self.time_stepping == "CN":
+            self.dis_error = max(self.dz**2, self.dt**3)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
         self.ls_error = self.dis_error/1000
@@ -351,10 +351,10 @@ class Solver:
         self.g_matrix = sp.dia_matrix(self.g_matrix)
         # print(self.g_matrix.toarray())
 
-        self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
-        # print(f"f_matrix: {self.f_matrix}")
-        self.f_matrix = sp.csr_matrix(self.f_matrix)
-        # print(f"f_matrix: {self.f_matrix.toarray()}")
+        # self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
+        # # print(f"f_matrix: {self.f_matrix}")
+        # self.f_matrix = sp.csr_matrix(self.f_matrix)
+        # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.params.n_points - 2, 1.0), 1) + np.diag(np.full(self.params.n_points - 1, -2.0), 0)
@@ -385,9 +385,13 @@ class Solver:
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
-        self.b_vector = np.zeros(self.params.n_points - 1)
+        self.b_v_vector = np.zeros(self.params.n_points - 1)
         # print(self.b_vector)
-        self.b_vector[0] = - self.params.v_in / (2 * self.params.dz)
+        self.b_v_vector[0] = - self.params.v_in / (2 * self.params.dz)
+
+        self.b_p_vector = np.zeros(self.params.n_points - 1)
+        # print(self.b_vector)
+        self.b_p_vector[0] = - self.params.p_in / (2 * self.params.dz)
 
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
@@ -409,12 +413,15 @@ class Solver:
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector + \
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector + \
                   self.MMS.S_nu
 
         else:
-            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector
-        lhs = self.g_matrix + self.f_matrix
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector
+        p_total = np.sum(p_partial, axis=1)
+        dpt_dx = self.g_matrix.dot(p_total) + self.b_p_vector
+        f_matrix = sp.diags(dpt_dx/p_total)
+        lhs = self.g_matrix + f_matrix
         #print(f"lhs: {lhs}, rhs: {rhs}")
         velocities = sp.linalg.spsolve(lhs, rhs)
         #print(velocities)
@@ -493,7 +500,7 @@ class Solver:
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
-        print("u_old is:", u)
+        #print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
         q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
@@ -505,17 +512,18 @@ class Solver:
         else:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
+        #print("q_eq matrix is:", q_eq)
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        print("dq_ads_dt matrix is:", dq_ads_dt)
+        #print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        print("v vector is:", v)
+        #print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        print("dp_dt matrix is:", dp_dt)
+        #print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
         du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
-        print("du_dt matrix is:", du_dt)
+        #print("du_dt matrix is:", du_dt)
         return du_dt
 
     def solve(self):
@@ -545,7 +553,6 @@ class Solver:
                 u_1 = forward_euler(u_0)
             elif self.params.time_stepping == "CN":
                 u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
-            print("u_new is:", u_1)
             # if not self.verify_pressures(u_1[0:self.params.n_points-1]):
             #     print("The sum of partial pressures is not equal to 1!")
 

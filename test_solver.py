@@ -42,7 +42,7 @@ class TestSolver(unittest.TestCase):
         print("Matrix G: ", solver.g_matrix)
         print("Matrix L: ", solver.l_matrix)
         print("Matrix D: ", solver.d_matrix)
-        print("Vector B: ", solver.b_vector)
+        print("Vector B: ", solver.b_v_vector)
         np.testing.assert_allclose(solver.g_matrix, [[0., 4., 0.],
                                                      [-4., 0., 4.],
                                                      [4., -16., 12.]], 1e-5)
@@ -52,7 +52,7 @@ class TestSolver(unittest.TestCase):
         np.testing.assert_allclose(solver.d_matrix, [[0.00192139, 0.00768556],
                                                      [0., 0.],
                                                      [0., 0.]], 1e-5)
-        np.testing.assert_allclose(solver.b_vector, [-1., 0., 0.])
+        np.testing.assert_allclose(solver.b_v_vector, [-1., 0., 0.])
 
     def test_caclulate_dp_dt1(self):
         """
@@ -97,9 +97,9 @@ class TestSolver(unittest.TestCase):
 
     def test_solve_function(self):
         params = SysParams()
-        params.init_params(t_end=10000, dt=0.1, y_in=np.asarray([0.5, 0.5]), n_points=5, p_in=2e5, temp=313,
+        params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=10, p_in=2e5, temp=313,
                            c_len=1, u_in=1, void_frac=0.995, disp=[250, 250], kl=[4.35, 1.47], rho_p=500,
-                           p_out=1.9e5, time_stepping="BE", dimensionless=True)
+                           p_out=1.99e5, time_stepping="BE", dimensionless=True)
         solver = Solver(params)
         # ls = LinearizedSystem(solver, params)
         # ls.get_estimated_dt()
