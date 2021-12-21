@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
 import iast, os
+import os
 
 
 class SysParams:
@@ -145,12 +146,12 @@ class SysParams:
         # Determine the magnitude of errors
         self.time_stepping = time_stepping
         if self.time_stepping == "BE" or self.time_stepping == "FE":
-            self.dis_error = max(self.dz**2, self.dt)
+            self.dis_error = max(self.dz ** 2, self.dt)
         elif self.time_stepping == "CN":
-            self.dis_error = max(self.dz**2, self.dt**2)
+            self.dis_error = max(self.dz ** 2, self.dt ** 2)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error/100
+        self.ls_error = self.dis_error / 100
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -165,6 +166,7 @@ class SysParams:
 
         dirpath = os.path.abspath(os.path.dirname(__file__))
         self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+
 
 class MMS:
     def __init__(self, sys_params, solver):
@@ -182,6 +184,7 @@ class MMS:
         self.dnupi_dz = np.zeros(self.__params.n_points - 1)
         self.q_eq = np.zeros(self.__params.n_points - 1)
         self.q_ads = np.zeros(self.__params.n_points - 1)
+        # This is incorrect, but idk what it should be doing
         self.xi = np.linspace(self.__params.c_len, self.__params.n_points)[1:]
         # Initialize 2D arrays as attributes
         self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
@@ -194,21 +197,26 @@ class MMS:
         self.q_ads_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.delta_q_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_diffusion_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.a = 0
+        self.b = 0
         # Initialize constants as attributes
         if self.__params.mms_mode == "steady":
             self.b = 0
-        if self.__params.mms_mode == "transient":
+        elif self.__params.mms_mode == "transient":
             self.b = 1
+        else:
+            raise Warning("mms_mode needs to be either transient or steady!")
         if self.__params.ms_pt_distribution == "constant":
             self.a = 0
-        if self.__params.ms_pt_distribution == "linear":
+        elif self.__params.ms_pt_distribution == "linear":
             self.a = 1
+        else:
+            raise Warning("ms_pt_distribution needs to be either constant or linear!")
         self.pt = 1 - self.a * self.xi / 2
-        self.pi_0 = self.pt / self.__params.n_components
+        self.pi_0 = self.pt[0] / self.__params.n_components
         self.nu_0 = 1
         self.dpt_dz = - self.a / 2
         self.c = self.__params.mms_conv_factor
-        self.xi = self.__params.xi
         self.t_factor = 0
         self.RT = self.__solver.R * self.__params.temp
         self.void_term = (1 - self.__params.void_frac) / self.__params.void_frac * self.__params.rho_p * self.RT
@@ -280,20 +288,20 @@ class OoA:
     def __init__(self, which, n):
         self.n = n
         self.type = which
-        if self.type != "Space" or self.type != "Time":
+        if self.type != "Space" and self.type != "Time":
             raise Warning("which of OoM must be either Space or Time")
 
     def analysis(self):
-        nodes_list = [self.n, 2*self.n, 3*self.n]
+        nodes_list = [self.n, 2 * self.n, 3 * self.n]
         error_list = []
         params = SysParams()
         for nodes in nodes_list:
             error_matrix = None
             if self.type == "Space":
                 params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
-                                   temp=313,  c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
+                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
                                    append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
                 solver = Solver(params)
                 solver.MMS.update_source_functions(0)
                 dp_dt_manufactured = solver.MMS.dpi_dt_matrix
@@ -318,7 +326,7 @@ class OoA:
                 params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
                                    temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
                                    append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
                 solver = Solver(params)
 
                 solver.MMS.update_source_functions(0)
@@ -326,11 +334,11 @@ class OoA:
 
                 error_matrix = p_i_calc - p_i_manufactured
 
-            error_norm_i = np.sqrt(np.mean(error_matrix**2, axis=0))
-            error_norm = np.sqrt(np.mean(error_norm_i**2))
+            error_norm_i = np.sqrt(np.mean(error_matrix ** 2, axis=0))
+            error_norm = np.sqrt(np.mean(error_norm_i ** 2))
             error_list.append(error_norm)
 
-        OoA = np.log((error_list[2] - error_list[1])/(error_list[1] - error_list[0]))/np.log(2)
+        OoA = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
         return OoA, error_list, nodes_list
 
 
@@ -359,8 +367,8 @@ class Solver:
         self.g_matrix[-1, -3] = 1.0
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
-        #print(self.g_matrix)
-        #print(self.params.dz)
+        # print(self.g_matrix)
+        # print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.dia_matrix(self.g_matrix)
         # print(self.g_matrix.toarray())
@@ -413,9 +421,9 @@ class Solver:
 
         :return: Array containing velocities at each grid point.
         """
-        #print(f"b_Vector: {self.b_vector}")
-        #print(f"g_matrix {self.g_matrix}")
-        #print(f"f_matrix: {self.f_matrix}")
+        # print(f"b_Vector: {self.b_vector}")
+        # print(f"g_matrix {self.g_matrix}")
+        # print(f"f_matrix: {self.f_matrix}")
         ldf = np.multiply(self.kl_matrix, q_eq - q_ads)
         lp = np.multiply(self.disp_matrix / (self.R * self.params.temp), self.l_matrix.dot(p_partial))
         component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
@@ -429,9 +437,9 @@ class Solver:
         else:
             rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_vector
         lhs = self.g_matrix + self.f_matrix
-        #print(f"lhs: {lhs}, rhs: {rhs}")
+        # print(f"lhs: {lhs}, rhs: {rhs}")
         velocities = sp.linalg.spsolve(lhs, rhs)
-        #print(velocities)
+        # print(velocities)
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -450,7 +458,7 @@ class Solver:
 
         m_matrix = np.multiply(velocities, p_partial)
 
-        #print(self.g_matrix, m_matrix)
+        # print(self.g_matrix, m_matrix)
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * \
@@ -502,7 +510,7 @@ class Solver:
         equilibrium_loadings = np.empty(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
             equilibrium_loadings[i, :-1] = iast.solve(partial_pressures[i, :-1], self.params.isotherms)
-        #print(f"Equilibrium loadings: {equilibrium_loadings}")
+        # print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
@@ -560,11 +568,11 @@ class Solver:
             elif self.params.time_stepping == "CN":
                 u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
 
-            if not self.verify_pressures(u_1[0:self.params.n_points-1]):
+            if not self.verify_pressures(u_1[0:self.params.n_points - 1]):
                 print("The sum of partial pressures is not equal to 1!")
 
             # Calculate derivative to check convergance
-            du_dt = (u_1 - u_0)/self.params.dt
+            du_dt = (u_1 - u_0) / self.params.dt
 
             # Update time
             t += self.params.dt
@@ -572,7 +580,7 @@ class Solver:
             # Initialize variables for the next time step
             u_0 = u_1
 
-        return u_1[0:self.params.n_points-1]
+        return u_1[0:self.params.n_points - 1]
 
 
 class LinearizedSystem:
@@ -623,3 +631,7 @@ class LinearizedSystem:
                             ("FE", fe_stability_equation)):
             dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1.0), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
+
+
+ooa = OoA("Space", 100)
+ooa.analysis()
