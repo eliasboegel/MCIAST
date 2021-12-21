@@ -34,9 +34,9 @@ class SysParams:
         self.dis_error = 0
         self.ls_error = 0
         self.time_stepping = 0
+        self.isotherms = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
-                    append_helium=True,
                     t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
@@ -50,7 +50,6 @@ class SysParams:
         :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
-        :param outlet_boundary_type: String that specifies the type of the outlet boundary.
         :param dimensionless: Boolean that specifies whether dimensionless numbers are used.
         :param time_stepping: String that specifies the time of stepping methods.
         :param y_in: Array containing mole fractions at the start.
@@ -63,7 +62,6 @@ class SysParams:
         :param disp: Array containing dispersion coefficient for every component.
         :param kl: Array containing effective mass transport coefficient of every component.
         :param rho_p: Density of the adsorbent.
-        :param append_helium: Choose to use helium as one of the components.
         :param mms: Choose if dynamic code testing is switched on.
         :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
         :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
@@ -75,32 +73,17 @@ class SysParams:
             self.t_end = t_end * u_in / c_len
             self.dt = dt * u_in / c_len
             self.nt = self.t_end / self.dt
-
-            if append_helium:
-                # 0 appended at the end for helium.
-                self.y_in = np.append(np.asarray(y_in), 0)
-                # Dimensionless mass transfer coefficients, with the coefficient of helium appended
-                self.kl = np.append(np.asarray(kl) * c_len / u_in, 0)
-                # Dimensionless dispersion coefficients, with the coefficient of helium appended
-                self.disp = np.append(np.asarray(disp) / (c_len * u_in), 0)
-            else:
-                self.y_in = np.asarray(y_in)
-                self.kl = np.asarray(kl) * c_len / u_in
-                self.disp = np.asarray(disp) / (c_len * u_in)
+            self.y_in = np.asarray(y_in)
+            self.kl = np.asarray(kl) * c_len / u_in
+            self.disp = np.asarray(disp) / (c_len * u_in)
 
         else:
             self.t_end = t_end
             self.dt = dt
             self.nt = self.t_end / self.dt
-
-            if append_helium:
-                self.y_in = np.append(np.asarray(y_in), 0)
-                self.kl = np.append(np.asarray(kl), 0)
-                self.disp = np.append(np.asarray(disp), 0)
-            else:
-                self.y_in = np.asarray(y_in)
-                self.kl = np.asarray(kl)
-                self.disp = np.asarray(disp)
+            self.y_in = np.asarray(y_in)
+            self.kl = np.asarray(kl)
+            self.disp = np.asarray(disp)
 
         # Pressure at the inlet is also equal to the total pressure at each point of the grid
         self.p_in = p_in
@@ -131,7 +114,7 @@ class SysParams:
 
         self.p_partial_in = self.y_in * p_in
 
-        # The number of components assessed based on the length of y_in array (plus helium)
+        # The number of components assessed based on the length of y_in array
         self.n_components = self.y_in.shape[0]
 
         # Parameters for outlet boundary condition
@@ -411,7 +394,6 @@ class Solver:
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
         :param p_partial: Matrix containing partial pressures of all the components at every grid point.
         Each row represents different grid point.
-        :param p_total: Vector containing total pressures at each grid point.
         :param q_eq: Matrix containing equilibrium loadings of each component at each grid point.
         :param q_ads: Matrix containing average loadings in the
 
@@ -446,7 +428,6 @@ class Solver:
         :param p_partial: Matrix containing partial pressures of every component at each grid point.
         :param q_eq: Matrix containing equilibrium loadings of every component at each grid point.
         :param q_ads: Matrix containing average loadings in the adsorbent of every component at each grid point.
-        :param ro_p: Density of the adsorbent (?)
         :return: Matrix containing the time derivatives of partial pressures of each component at each grid point.
         """
         # This can be removed if we assume that a matrix in a correct form is passed
@@ -505,12 +486,12 @@ class Solver:
     def apply_iast(self, partial_pressures):
         equilibrium_loadings = np.empty(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            equilibrium_loadings[i, :-1] = iast.solve(partial_pressures[i, :-1], self.params.isotherms)
+            equilibrium_loadings[i] = iast.solve(partial_pressures[i], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
-        #print("u_old is:", u)
+        print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
         q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
@@ -523,16 +504,16 @@ class Solver:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        #print("dq_ads_dt matrix is:", dq_ads_dt)
+        print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        #print("v vector is:", v)
+        print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        #print("dp_dt matrix is:", dp_dt)
+        print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
         du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
-        #print("du_dt matrix is:", du_dt)
+        print("du_dt matrix is:", du_dt)
         return du_dt
 
     def solve(self):
@@ -548,8 +529,7 @@ class Solver:
 
         # Create initial conditions
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
-        p_partial_initial = np.full((self.params.n_points - 1, self.params.n_components), 1e-10)
-        p_partial_initial[:, -1] = self.params.p_total
+        p_partial_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
 
         t = 0
