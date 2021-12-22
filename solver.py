@@ -495,12 +495,12 @@ class Solver:
         for i in range(partial_pressures.shape[0]):
             if np.allclose(partial_pressures[i, 0:-1], zero,
                            atol=self.params.ls_error) is False:
-                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
+                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1]/1e5, self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
-        print("u_old is:", u)
+        #print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
         q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
@@ -512,18 +512,19 @@ class Solver:
         else:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
-        print("q_eq matrix is:", q_eq)
+        #print("q_eq matrix is:", q_eq)
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        print("dq_ads_dt matrix is:", dq_ads_dt)
+        #print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        print("v vector is:", v)
+        #print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        print("dp_dt matrix is:", dp_dt)
+        #print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
         du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
-        print("du_dt matrix is:", du_dt)
+        #print("du_dt matrix is:", du_dt)
+        #print("Another internal iteration...")
         return du_dt
 
     def solve(self):
@@ -549,6 +550,7 @@ class Solver:
         u_1 = None
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
+            #print("Another timestep...")
             if self.params.time_stepping == "BE":
                 u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), xin=u_0, f_tol=self.params.ls_error)
             elif self.params.time_stepping == "FE":
