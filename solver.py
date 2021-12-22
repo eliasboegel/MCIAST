@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
-import iast, os
+import iast
+import os
 
 
 class SysParams:
@@ -137,7 +138,7 @@ class SysParams:
             self.dis_error = max(self.dz**2, self.dt**3)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error/100
+        self.ls_error = self.dis_error / 100
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -182,17 +183,23 @@ class MMS:
         self.q_ads_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.delta_q_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_diffusion_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
+        self.a = 0
+        self.b = 0
         # Initialize constants as attributes
         if self.__params.mms_mode == "steady":
             self.b = 0
-        if self.__params.mms_mode == "transient":
+        elif self.__params.mms_mode == "transient":
             self.b = 1
+        else:
+            raise Warning("mms_mode needs to be either transient or steady!")
         if self.__params.ms_pt_distribution == "constant":
             self.a = 0
-        if self.__params.ms_pt_distribution == "linear":
+        elif self.__params.ms_pt_distribution == "linear":
             self.a = 1
+        else:
+            raise Warning("ms_pt_distribution needs to be either constant or linear!")
         self.pt = 1 - self.a * self.xi / 2
-        self.pi_0 = self.pt / self.__params.n_components
+        self.pi_0 = self.pt[0] / self.__params.n_components
         self.nu_0 = 1
         self.dpt_dz = - self.a / 2
         self.c = self.__params.mms_conv_factor
@@ -267,20 +274,20 @@ class OoA:
     def __init__(self, which, n):
         self.n = n
         self.type = which
-        if self.type != "Space" or self.type != "Time":
+        if self.type != "Space" and self.type != "Time":
             raise Warning("which of OoM must be either Space or Time")
 
     def analysis(self):
-        nodes_list = [self.n, 2*self.n, 3*self.n]
+        nodes_list = [self.n, 2 * self.n, 3 * self.n]
         error_list = []
         params = SysParams()
         for nodes in nodes_list:
             error_matrix = None
             if self.type == "Space":
                 params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
-                                   temp=313,  c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
+                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
                                    time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
                 solver = Solver(params)
                 solver.MMS.update_source_functions(0)
                 dp_dt_manufactured = solver.MMS.dpi_dt_matrix
@@ -305,7 +312,7 @@ class OoA:
                 params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
                                    temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
                                    time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
+                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
                 solver = Solver(params)
 
                 solver.MMS.update_source_functions(0)
@@ -313,11 +320,11 @@ class OoA:
 
                 error_matrix = p_i_calc - p_i_manufactured
 
-            error_norm_i = np.sqrt(np.mean(error_matrix**2, axis=0))
-            error_norm = np.sqrt(np.mean(error_norm_i**2))
+            error_norm_i = np.sqrt(np.mean(error_matrix ** 2, axis=0))
+            error_norm = np.sqrt(np.mean(error_norm_i ** 2))
             error_list.append(error_norm)
 
-        OoA = np.log((error_list[2] - error_list[1])/(error_list[1] - error_list[0]))/np.log(2)
+        OoA = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
         return OoA, error_list, nodes_list
 
 
@@ -349,11 +356,8 @@ class Solver:
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
         print("initial g_matrix is", self.g_matrix)
-        #print(self.g_matrix)
-        #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
-        # print(self.g_matrix.toarray())
 
         # self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
         # # print(f"f_matrix: {self.f_matrix}")
@@ -426,9 +430,7 @@ class Solver:
         dpt_dx = self.g_matrix.dot(p_total) + self.b_p_vector
         f_matrix = sp.diags(dpt_dx/p_total)
         lhs = self.g_matrix + f_matrix
-        #print(f"lhs: {lhs}, rhs: {rhs}")
         velocities = sp.linalg.spsolve(lhs, rhs)
-        #print(velocities)
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -446,7 +448,6 @@ class Solver:
 
         m_matrix = np.multiply(velocities, p_partial)
 
-        #print(self.g_matrix, m_matrix)
         advection_term = -self.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.disp_matrix, self.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.R * self.params.void_frac_term * \
@@ -563,7 +564,7 @@ class Solver:
             #     print("The sum of partial pressures is not equal to 1!")
 
             # Calculate derivative to check convergance
-            du_dt = (u_1 - u_0)/self.params.dt
+            du_dt = (u_1 - u_0) / self.params.dt
 
             # Update time
             t += self.params.dt
@@ -571,7 +572,7 @@ class Solver:
             # Initialize variables for the next time step
             u_0 = np.copy(u_1)
 
-        return u_1[0:self.params.n_points-1]
+        return u_1[0:self.params.n_points - 1]
 
 
 class LinearizedSystem:
