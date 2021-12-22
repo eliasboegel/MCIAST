@@ -37,7 +37,7 @@ class SysParams:
         self.time_stepping = 0
         self.isotherms = 0
 
-    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
+    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p, dispersion_helium,
                     t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
@@ -71,7 +71,7 @@ class SysParams:
 
         y_in = np.append(y_in, 0)
         kl = np.append(kl, 0)
-        disp = np.append(disp, 250)
+        disp = np.append(disp, dispersion_helium)
 
         if dimensionless:
             # Dimensionless points in time
@@ -94,7 +94,7 @@ class SysParams:
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
-        # self.p_total = np.linspace(p_in, p_out, n_points)[1:]
+        self.p_total = np.linspace(p_in, p_out, n_points)[1:]
 
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
@@ -113,7 +113,7 @@ class SysParams:
         self.dz = self.c_len / (n_points - 1)
         # Dimensionless gradient of the total pressure
         # This can be modified if we assume the gradient is not constant
-        # self.dp_dz = (p_out - p_in) / self.c_len
+        self.dp_dz = (p_out - p_in) / self.c_len
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
 
@@ -359,9 +359,9 @@ class Solver:
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
 
-        # self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
+        self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
         # # print(f"f_matrix: {self.f_matrix}")
-        # self.f_matrix = sp.csr_matrix(self.f_matrix)
+        self.f_matrix = sp.csr_matrix(self.f_matrix)
         # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         self.l_matrix = np.diag(np.full(self.params.n_points - 2, 1.0), -1) + np.diag(
@@ -397,10 +397,6 @@ class Solver:
         # print(self.b_vector)
         self.b_v_vector[0] = - self.params.v_in / (2 * self.params.dz)
 
-        self.b_p_vector = np.zeros(self.params.n_points - 1)
-        # print(self.b_vector)
-        self.b_p_vector[0] = - self.params.p_in / (2 * self.params.dz)
-
     def calculate_velocities(self, p_partial, q_eq, q_ads):
         """
         Calculates velocities at all grid points. It is assumed that dpt/dxi = 0.
@@ -422,14 +418,12 @@ class Solver:
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -self.R * self.params.temp * component_sums / p_total - self.b_v_vector + \
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector + \
                   self.MMS.S_nu
 
         else:
-            rhs = -self.R * self.params.temp * component_sums / p_total - self.b_v_vector
-        dpt_dx = self.g_matrix.dot(p_total) + self.b_p_vector
-        f_matrix = sp.diags(dpt_dx/p_total)
-        lhs = self.g_matrix + f_matrix
+            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector
+        lhs = self.g_matrix + self.f_matrix
         velocities = sp.linalg.spsolve(lhs, rhs)
         return velocities
 
@@ -461,17 +455,17 @@ class Solver:
 
         return dp_dt
 
-    # def verify_pressures(self, p_partial):
-    #     """
-    #     Verify if all partial pressures sum up to 1.
-    #     :param p_partial
-    #     : Matrix containing partial pressures at each grid point
-    #     :return: True if the pressures sum up to 1, false otherwise
-    #     """
-    #     if self.params.mms is True:
-    #         return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
-    #     else:
-    #         return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
+    def verify_pressures(self, p_partial):
+        """
+        Verify if all partial pressures sum up to 1.
+        :param p_partial
+        : Matrix containing partial pressures at each grid point
+        :return: True if the pressures sum up to 1, false otherwise
+        """
+        if self.params.mms is True:
+            return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
+        else:
+            return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
@@ -482,7 +476,7 @@ class Solver:
         """
         return np.multiply(self.kl_matrix, q_eq - q_ads)
 
-    def check_steady_state(self, dp_dt):
+    def check_steady_state(self, du_dt):
         """
         Checks if the components have reached equilibrium and the adsorption process is finished by comparing
         partial pressures at the inlet and the outlet.
@@ -490,15 +484,16 @@ class Solver:
         :param p_partial_new: Matrix containing new partial pressures of all components at every point.
         :return: True if the equilibrium is reached, false otherwise.
         """
-        if dp_dt is None:
+        if du_dt is None:
             return False
-        return np.allclose(np.zeros(shape=(2 * self.params.n_points - 2, self.params.n_components)), dp_dt,
+        return np.allclose(np.zeros(shape=(2 * self.params.n_points - 2, self.params.n_components)), du_dt,
                            self.params.ls_error)
 
     def apply_iast(self, partial_pressures):
         equilibrium_loadings = np.zeros(partial_pressures.shape)
+        zero = np.zeros(self.params.n_components-1)
         for i in range(partial_pressures.shape[0]):
-            if np.allclose(partial_pressures[i, 0:-1], np.zeros(self.params.n_components-1),
+            if np.allclose(partial_pressures[i, 0:-1], zero,
                            atol=self.params.ls_error) is False:
                 equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
@@ -545,7 +540,7 @@ class Solver:
         # Create initial conditions
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
-        p_partial_initial[0:self.params.n_points - 1, -1] = self.params.p_in
+        p_partial_initial[:, -1] = self.params.p_total
         u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
         print("u_initial is ", u_0)
 
@@ -560,8 +555,9 @@ class Solver:
                 u_1 = forward_euler(u_0)
             elif self.params.time_stepping == "CN":
                 u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
-            # if not self.verify_pressures(u_1[0:self.params.n_points-1]):
-            #     print("The sum of partial pressures is not equal to 1!")
+
+            if not self.verify_pressures(u_1[0:self.params.n_points-1]):
+                print("The sum of partial pressures is not equal to 1!")
 
             # Calculate derivative to check convergance
             du_dt = (u_1 - u_0) / self.params.dt
