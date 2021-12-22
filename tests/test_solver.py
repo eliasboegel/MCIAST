@@ -2,7 +2,9 @@ import unittest
 
 import numpy as np
 
-from solver import *
+from src.linearized_system import LinearizedSystem
+from src.solver import Solver
+from src.system_parameters import SysParams
 
 
 class TestSolver(unittest.TestCase):
