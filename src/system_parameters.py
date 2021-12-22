@@ -210,7 +210,7 @@ class SysParams:
 
         if self.mms is True:
             # This should be changed!!!
-            p_partial_in = self.p_in / self.n_components
+            p_partial_in = 1
             v_in = 1
 
         else:
