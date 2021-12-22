@@ -97,7 +97,7 @@ class TestSolver(unittest.TestCase):
 
     def test_solve_function(self):
         params = SysParams()
-        params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=10, p_in=2e5, temp=313,
+        params.init_params(t_end=10000, dt=0.1, y_in=np.asarray([0.5, 0.5]), n_points=10, p_in=2e5, temp=313,
                            c_len=1, u_in=1, void_frac=0.995, disp=[250, 250], kl=[4.35, 1.47], rho_p=500,
                            p_out=1.99e5, time_stepping="BE", dimensionless=True)
         solver = Solver(params)

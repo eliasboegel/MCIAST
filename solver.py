@@ -68,6 +68,10 @@ class SysParams:
         :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
         """
 
+        y_in = np.append(y_in, 0)
+        kl = np.append(kl, 0)
+        disp = np.append(disp, 250)
+
         if dimensionless:
             # Dimensionless points in time
             self.t_end = t_end * u_in / c_len
@@ -89,7 +93,7 @@ class SysParams:
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
-        self.p_total = np.linspace(p_in, p_out, n_points)[1:]
+        # self.p_total = np.linspace(p_in, p_out, n_points)[1:]
 
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
@@ -108,7 +112,7 @@ class SysParams:
         self.dz = self.c_len / (n_points - 1)
         # Dimensionless gradient of the total pressure
         # This can be modified if we assume the gradient is not constant
-        self.dp_dz = (p_out - p_in) / self.c_len
+        # self.dp_dz = (p_out - p_in) / self.c_len
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
 
@@ -133,7 +137,7 @@ class SysParams:
             self.dis_error = max(self.dz**2, self.dt**3)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error/1000
+        self.ls_error = self.dis_error/100
 
         # Parameters for running dynamic code verification using MMS
         self.mms = mms
@@ -148,6 +152,7 @@ class SysParams:
 
         dirpath = os.path.abspath(os.path.dirname(__file__))
         self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+
 
 class MMS:
     def __init__(self, sys_params, solver):
@@ -165,7 +170,7 @@ class MMS:
         self.dnupi_dz = np.zeros(self.__params.n_points - 1)
         self.q_eq = np.zeros(self.__params.n_points - 1)
         self.q_ads = np.zeros(self.__params.n_points - 1)
-        self.xi = np.linspace(self.__params.c_len, self.__params.n_points)[1:]
+        self.xi = np.linspace(0, self.__params.c_len, self.__params.n_points - 1)[1:]
         # Initialize 2D arrays as attributes
         self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
@@ -191,7 +196,6 @@ class MMS:
         self.nu_0 = 1
         self.dpt_dz = - self.a / 2
         self.c = self.__params.mms_conv_factor
-        self.xi = self.__params.xi
         self.t_factor = 0
         self.RT = self.__solver.R * self.__params.temp
         self.void_term = (1 - self.__params.void_frac) / self.__params.void_frac * self.__params.rho_p * self.RT
@@ -275,7 +279,7 @@ class OoA:
             if self.type == "Space":
                 params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
                                    temp=313,  c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   append_helium=True, time_stepping="BE", dimensionless=True, mms=True,
+                                   time_stepping="BE", dimensionless=True, mms=True,
                                    ms_pt_distribution="linear", mms_mode="steady state", mms_convergence_factor=1000)
                 solver = Solver(params)
                 solver.MMS.update_source_functions(0)
@@ -348,7 +352,7 @@ class Solver:
         #print(self.g_matrix)
         #print(self.params.dz)
         self.g_matrix = self.g_matrix / (2.0 * self.params.dz)
-        self.g_matrix = sp.dia_matrix(self.g_matrix)
+        self.g_matrix = sp.csr_matrix(self.g_matrix)
         # print(self.g_matrix.toarray())
 
         # self.f_matrix = np.diag(self.params.dp_dz / self.params.p_total)
@@ -406,6 +410,7 @@ class Solver:
         #print(f"b_Vector: {self.b_vector}")
         #print(f"g_matrix {self.g_matrix}")
         #print(f"f_matrix: {self.f_matrix}")
+        p_total = np.sum(p_partial, axis=1)
         ldf = np.multiply(self.kl_matrix, q_eq - q_ads)
         lp = np.multiply(self.disp_matrix / (self.R * self.params.temp), self.l_matrix.dot(p_partial))
         component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
@@ -413,12 +418,11 @@ class Solver:
         # What about helium?
         # p_t = np.sum(p_partial, axis=1)
         if self.params.mms is True:
-            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector + \
+            rhs = -self.R * self.params.temp * component_sums / p_total - self.b_v_vector + \
                   self.MMS.S_nu
 
         else:
-            rhs = -self.R * self.params.temp * component_sums / self.params.p_total - self.b_v_vector
-        p_total = np.sum(p_partial, axis=1)
+            rhs = -self.R * self.params.temp * component_sums / p_total - self.b_v_vector
         dpt_dx = self.g_matrix.dot(p_total) + self.b_p_vector
         f_matrix = sp.diags(dpt_dx/p_total)
         lhs = self.g_matrix + f_matrix
@@ -493,14 +497,14 @@ class Solver:
     def apply_iast(self, partial_pressures):
         equilibrium_loadings = np.zeros(partial_pressures.shape)
         for i in range(partial_pressures.shape[0]):
-            if np.allclose(partial_pressures[i], np.zeros(self.params.n_components),
+            if np.allclose(partial_pressures[i, 0:-1], np.zeros(self.params.n_components-1),
                            atol=self.params.ls_error) is False:
-                equilibrium_loadings[i] = iast.solve(partial_pressures[i], self.params.isotherms)
+                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
         #print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
-        #print("u_old is:", u)
+        print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
         q_ads = u[self.params.n_points - 1: 2 * self.params.n_points - 2]
@@ -512,18 +516,18 @@ class Solver:
         else:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
-        #print("q_eq matrix is:", q_eq)
+        print("q_eq matrix is:", q_eq)
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        #print("dq_ads_dt matrix is:", dq_ads_dt)
+        print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        #print("v vector is:", v)
+        print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        #print("dp_dt matrix is:", dp_dt)
+        print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient matrix
         du_dt = np.concatenate((dp_dt, dq_ads_dt), axis=0)
-        #print("du_dt matrix is:", du_dt)
+        print("du_dt matrix is:", du_dt)
         return du_dt
 
     def solve(self):
@@ -540,7 +544,9 @@ class Solver:
         # Create initial conditions
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
+        p_partial_initial[0:self.params.n_points - 1, -1] = self.params.p_in
         u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
+        print("u_initial is ", u_0)
 
         t = 0
         du_dt = None
