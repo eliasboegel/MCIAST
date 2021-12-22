@@ -171,7 +171,7 @@ class MMS:
         self.dnupi_dz = np.zeros(self.__params.n_points - 1)
         self.q_eq = np.zeros(self.__params.n_points - 1)
         self.q_ads = np.zeros(self.__params.n_points - 1)
-        self.xi = np.linspace(0, self.__params.c_len, self.__params.n_points - 1)[1:]
+        self.xi = np.linspace(0, self.__params.c_len, self.__params.n_points)[1:]
         # Initialize 2D arrays as attributes
         self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
@@ -262,6 +262,12 @@ class MMS:
             # Update MS time derivative of p_i
             self.calculate_dpi_dt_ms(i)
             self.dpi_dt_matrix[:, i] = np.copy(self.dpi_dt)
+            # Update equivalent adsorbed loading
+            self.calculate_q_ads_ms(tau, i)
+            self.q_ads_matrix[:, i] = np.copy(self.q_ads)
+            # Update equivalent loading
+            self.calculate_q_eq_ms(tau)
+            self.q_eq_matrix[:, i] = np.copy(self.q_eq)
         self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
         self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__solver.disp_matrix
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
@@ -271,52 +277,50 @@ class MMS:
 
 
 class OoA:
-    def __init__(self, which, n):
+    def __init__(self, which, n, dt):
         self.n = n
+        self.dt = dt
         self.type = which
         if self.type != "Space" and self.type != "Time":
             raise Warning("which of OoM must be either Space or Time")
 
     def analysis(self):
-        nodes_list = [self.n, 2 * self.n, 3 * self.n]
+        discretization_list = [(self.dt, self.n), (self.dt / 2, 2 * self.n), (self.dt / 3, 3 * self.n)]
         error_list = []
-        params = SysParams()
-        for nodes in nodes_list:
+        ss_params = SysParams()
+        for (dt, nodes) in discretization_list:
+            ss_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.5, 0.5]), n_points=nodes, p_in=2e5,
+                                  temp=298, c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47],
+                                  rho_p=1000, p_out=2e5, time_stepping="BE", dimensionless=True,
+                                  dispersion_helium=0.004, mms=True, ms_pt_distribution="linear",
+                                  mms_mode="steady", mms_convergence_factor=1000)
+            ss_solver = Solver(ss_params)
             error_matrix = None
             if self.type == "Space":
-                params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
-                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
-                solver = Solver(params)
-                solver.MMS.update_source_functions(0)
-                dp_dt_manufactured = solver.MMS.dpi_dt_matrix
+                ss_solver.MMS.update_source_functions(0)
+                dp_dt_manufactured = ss_solver.MMS.dpi_dt_matrix
 
-                q_ads = solver.MMS.q_ads_matrix
-                p_partial = solver.MMS.pi_matrix
-                u = np.concatenate((p_partial, q_ads), axis=1)
-                du_dt_calc = solver.calculate_dudt(u, 0)
-                dp_dt_calc = du_dt_calc[0, nodes]
+                q_ads = ss_solver.MMS.q_ads_matrix
+                p_partial = ss_solver.MMS.pi_matrix
+                u = np.concatenate((p_partial, q_ads), axis=0)
+                du_dt_calc = ss_solver.calculate_dudt(u, 0)
+                dp_dt_calc = du_dt_calc[0:nodes - 1]
 
                 error_matrix = dp_dt_calc - dp_dt_manufactured
 
             elif self.type == "Time":
-                params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
-                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
-                solver = Solver(params)
+                t_params = SysParams()
+                t_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.5, 0.5]), n_points=nodes, p_in=2e5,
+                                     temp=298, c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47],
+                                     rho_p=1000, p_out=2e5, time_stepping="BE", dimensionless=True,
+                                     dispersion_helium=0.004, mms=True, ms_pt_distribution="linear",
+                                     mms_mode="transient", mms_convergence_factor=1000)
+                t_solver = Solver(t_params)
 
-                p_i_calc = solver.solve()
+                p_i_calc = t_solver.solve()
 
-                params.init_params(t_end=1000, dt=0.1, y_in=np.asarray([0.2, 0.8]), n_points=nodes, p_in=1.0, p_out=0.5,
-                                   temp=313, c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500,
-                                   time_stepping="BE", dimensionless=True, mms=True,
-                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
-                solver = Solver(params)
-
-                solver.MMS.update_source_functions(0)
-                p_i_manufactured = solver.MMS.pi_matrix
+                ss_solver.MMS.update_source_functions(0)
+                p_i_manufactured = ss_solver.MMS.pi_matrix
 
                 error_matrix = p_i_calc - p_i_manufactured
 
@@ -325,7 +329,7 @@ class OoA:
             error_list.append(error_norm)
 
         OoA = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
-        return OoA, error_list, nodes_list
+        return OoA, discretization_list
 
 
 class Solver:
@@ -550,7 +554,7 @@ class Solver:
         u_1 = None
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
-            #print("Another timestep...")
+            print("Another timestep...")
             if self.params.time_stepping == "BE":
                 u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), xin=u_0, f_tol=self.params.ls_error)
             elif self.params.time_stepping == "FE":
@@ -621,3 +625,7 @@ class LinearizedSystem:
                             ("FE", fe_stability_equation)):
             dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1.0), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
+
+
+ooa = OoA(which="Space", n=100, dt=0.001)
+print(ooa.analysis()[0])
