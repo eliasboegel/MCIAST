@@ -45,7 +45,7 @@ class SysParams:
         self.l_matrix = 0
         self.d_matrix = 0
         self.b_v_vector = 0
-
+        self.xi = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p, dispersion_helium,
                     t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
@@ -106,7 +106,6 @@ class SysParams:
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
-        self.p_total = np.linspace(p_in, p_out, n_points)[1:]
 
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
@@ -125,11 +124,28 @@ class SysParams:
         self.dz = self.c_len / (n_points - 1)
         # Dimensionless gradient of the total pressure
         # This can be modified if we assume the gradient is not constant
-        self.dp_dz = (p_out - p_in) / self.c_len
+
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
 
-        self.p_partial_in = self.y_in * p_in
+        # MMS stuff
+        self.xi = np.linspace(0, self.c_len, self.n_points)[1:]
+        if self.mms is True:
+            if self.ms_pt_distribution == "constant":
+                self.p_total = 1
+                self.dp_dz = 0
+            elif self.ms_pt_distribution == "linear":
+                self.p_total = 1 - self.xi / 2
+                self.dp_dz = - 1/2
+            else:
+                self.p_total = 1
+                raise Warning("ms_pt_distribution needs to be either constant or linear!")
+            self.p_partial_in = np.full(self.n_components, self.p_total[0]/self.n_components)
+
+        else:
+            self.p_partial_in = self.y_in * p_in
+            self.p_total = np.linspace(p_in, p_out, n_points)[1:]
+            self.dp_dz = (p_out - p_in) / self.c_len
 
         # The number of components assessed based on the length of y_in array
         self.n_components = self.y_in.shape[0]
@@ -208,18 +224,9 @@ class SysParams:
         self.l_matrix = sp.csr_matrix(self.l_matrix)
         # print(f"l_matrix {self.l_matrix.toarray()}")
 
-        if self.mms is True:
-            # This should be changed!!!
-            p_partial_in = 1
-            v_in = 1
-
-        else:
-            p_partial_in = self.p_partial_in
-            v_in = self.v_in
-
         self.d_matrix = np.zeros((self.n_points - 1, self.n_components), dtype="float")
-        first_row = p_partial_in * (
-                (v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
+        first_row = self.p_partial_in * (
+                (self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 

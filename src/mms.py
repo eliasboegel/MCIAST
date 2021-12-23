@@ -16,7 +16,6 @@ class MMS:
         self.dnupi_dz = np.zeros(self.__params.n_points - 1)
         self.q_eq = np.zeros(self.__params.n_points - 1)
         self.q_ads = np.zeros(self.__params.n_points - 1)
-        self.xi = np.linspace(0, self.__params.c_len, self.__params.n_points)[1:]
         # Initialize 2D arrays as attributes
         self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
@@ -43,43 +42,40 @@ class MMS:
             self.a = 1
         else:
             raise Warning("ms_pt_distribution needs to be either constant or linear!")
-        self.pt = 1 - self.a * self.xi / 2
-        self.pi_0 = self.pt[0] / self.__params.n_components
-        self.nu_0 = 1
-        self.dpt_dz = - self.a / 2
         self.c = self.__params.mms_conv_factor
         self.t_factor = 0
         self.RT = self.__params.R * self.__params.temp
-        self.void_term = (1 - self.__params.void_frac) / self.__params.void_frac * self.__params.rho_p * self.RT
+        self.void_term = self.__params.void_frac_term * self.RT
 
     def calculate_pi_ms(self, i):
-        self.pi = self.pi_0 + (-1) ** i * (np.sin(np.pi / 2 * self.xi) +
-                                           self.b * self.t_factor * np.sin(np.pi * self.xi))
+        self.pi = self.__params.p_partial_in[0] + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
+                                           self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
     def calculate_nu_ms(self):
-        self.nu = 1 - 0.5 * np.sin(np.pi / 2 * self.xi) + self.b * self.t_factor * np.sin(np.pi * self.xi) ** 2
+        self.nu = 1 - 0.5 * np.sin(np.pi / 2 * self.__params.xi) + self.b * self.t_factor * np.sin(np.pi * self.__params.xi) ** 2
 
     def calculate_q_ads_ms(self, tau, i):
-        self.q_ads = self.b * self.__params.kl[i] * self.xi * tau * self.t_factor
+        self.q_ads = self.b * self.__params.kl[i] * self.__params.xi * tau * self.t_factor
 
     def calculate_q_eq_ms(self, tau):
-        self.q_eq = self.b * self.xi * (self.t_factor - tau * self.t_factor / self.c) + self.q_ads
+        self.q_eq = self.b * self.__params.xi * (self.t_factor - tau * self.t_factor / self.c) + self.q_ads
 
     def calculate_dpi_dz_ms(self, i):
         self.dpi_dz = -self.a / (2 * self.__params.n_components) + \
-                      (-1) ** i * np.pi * (0.5 * np.cos(np.pi / 2 * self.xi) +
-                                           self.b * self.t_factor * np.cos(np.pi * self.xi))
+                      (-1) ** i * np.pi * (0.5 * np.cos(np.pi / 2 * self.__params.xi) +
+                                           self.b * self.t_factor * np.cos(np.pi * self.__params.xi))
 
     def calculate_d2pi_dz2_ms(self, i):
-        self.d2pi_dz2 = -(-1) ** i * np.pi ** 2 * (0.25 * np.sin(np.pi / 2 * self.xi) +
-                                                   self.b * self.t_factor * np.sin(np.pi * self.xi))
+        self.d2pi_dz2 = -(-1) ** i * np.pi ** 2 * (0.25 * np.sin(np.pi / 2 * self.__params.xi) +
+                                                   self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
     def calculate_dpi_dt_ms(self, i):
-        self.dpi_dt = self.b * (-(-1) ** i * self.t_factor * np.sin(np.pi * self.xi)) / self.c
+        self.dpi_dt = self.b * (-(-1) ** i * self.t_factor * np.sin(np.pi * self.__params.xi)) / self.c
 
     def calculate_dnu_dz_ms(self):
-        self.dnu_dz = np.pi * (-0.25 * np.cos(np.pi / 2 * self.xi) +
-                               self.b * 2 * self.t_factor * np.sin(np.pi * self.xi) * np.cos(np.pi * self.xi))
+        self.dnu_dz = np.pi * (-0.25 * np.cos(np.pi / 2 * self.__params.xi) +
+                               self.b * 2 * self.t_factor * np.sin(np.pi * self.__params.xi) * np.cos(
+                    np.pi * self.__params.xi))
 
     def calculate_dnupi_dz(self):
         self.dnupi_dz = self.pi * self.dnu_dz + self.nu * self.dpi_dz
@@ -118,4 +114,4 @@ class MMS:
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
                     self.void_term * self.__params.kl_matrix * self.delta_q_matrix
         self.S_nu = self.dnu_dz + np.sum((self.void_term * self.__params.kl_matrix *
-                                          self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.pt
+                                          self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.__params.p_total

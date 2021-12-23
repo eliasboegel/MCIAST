@@ -83,10 +83,7 @@ class Solver:
         : Matrix containing partial pressures at each grid point
         :return: True if the pressures sum up to 1, false otherwise
         """
-        if self.params.mms is True:
-            return np.allclose(np.sum(p_partial, axis=1), self.MMS.pt, atol=self.params.ls_error)
-        else:
-            return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
+        return np.allclose(np.sum(p_partial, axis=1), self.params.p_total, atol=self.params.ls_error)
 
     def calculate_dq_ads_dt(self, q_eq, q_ads):
         """
