@@ -48,11 +48,12 @@ class MMS:
         self.void_term = self.__params.void_frac_term * self.RT
 
     def calculate_pi_ms(self, i):
-        self.pi = self.__params.p_partial_in[0] + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
+        self.pi = self.__params.p_partial_in[i] + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
                                            self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
     def calculate_nu_ms(self):
-        self.nu = 1 - 0.5 * np.sin(np.pi / 2 * self.__params.xi) + self.b * self.t_factor * np.sin(np.pi * self.__params.xi) ** 2
+        self.nu = self.__params.v_in - 0.5 * np.sin(np.pi / 2 * self.__params.xi) + \
+                  self.b * self.t_factor * np.sin(np.pi * self.__params.xi) ** 2
 
     def calculate_q_ads_ms(self, tau, i):
         self.q_ads = self.b * self.__params.kl[i] * self.__params.xi * tau * self.t_factor
@@ -86,7 +87,7 @@ class MMS:
         # Update MS velocity for all components
         self.calculate_nu_ms()
         # Update 1st derivative of MS velocity for all components
-        self.calculate_dnupi_dz()
+        self.calculate_dnu_dz_ms()
         for i in range(0, self.__params.n_components):
             # Update MS pressure for component i
             self.calculate_pi_ms(i)

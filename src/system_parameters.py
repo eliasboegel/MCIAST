@@ -102,6 +102,9 @@ class SysParams:
             self.kl = np.asarray(kl)
             self.disp = np.asarray(disp)
 
+        # The number of components assessed based on the length of y_in array
+        self.n_components = self.y_in.shape[0]
+
         # Pressure at the inlet is also equal to the total pressure at each point of the grid
         self.p_in = p_in
         self.p_out = p_out
@@ -122,8 +125,6 @@ class SysParams:
         # Dimensionless length of the column (always 1)
         self.c_len = 1
         self.dz = self.c_len / (n_points - 1)
-        # Dimensionless gradient of the total pressure
-        # This can be modified if we assume the gradient is not constant
 
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
@@ -140,15 +141,12 @@ class SysParams:
             else:
                 self.p_total = 1
                 raise Warning("ms_pt_distribution needs to be either constant or linear!")
-            self.p_partial_in = np.full(self.n_components, self.p_total[0]/self.n_components)
+            self.p_partial_in = np.full(self.n_components, 1/self.n_components)
 
         else:
             self.p_partial_in = self.y_in * p_in
             self.p_total = np.linspace(p_in, p_out, n_points)[1:]
             self.dp_dz = (p_out - p_in) / self.c_len
-
-        # The number of components assessed based on the length of y_in array
-        self.n_components = self.y_in.shape[0]
 
         # Parameters for outlet boundary condition
         if self.p_in == self.p_out:
