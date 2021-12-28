@@ -30,7 +30,6 @@ class Solver:
         # print(f"b_Vector: {self.b_vector}")
         # print(f"g_matrix {self.g_matrix}")
         # print(f"f_matrix: {self.f_matrix}")
-        p_total = np.sum(p_partial, axis=1)
         ldf = np.multiply(self.params.kl_matrix, q_eq - q_ads)
         lp = np.multiply(self.params.disp_matrix / (self.params.R * self.params.temp),
                          self.params.l_matrix.dot(p_partial))

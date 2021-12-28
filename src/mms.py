@@ -48,7 +48,7 @@ class MMS:
         self.void_term = self.__params.void_frac_term * self.RT
 
     def calculate_pi_ms(self, i):
-        self.pi = self.__params.p_partial_in[i] + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
+        self.pi = self.__params.p_total/self.__params.n_components + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
                                            self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
     def calculate_nu_ms(self):
@@ -114,5 +114,6 @@ class MMS:
         self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__params.disp_matrix
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
                     self.void_term * self.__params.kl_matrix * self.delta_q_matrix
-        self.S_nu = self.dnu_dz + np.sum((self.void_term * self.__params.kl_matrix *
-                                          self.delta_q_matrix - self.pi_diffusion_matrix), axis=1) / self.__params.p_total
+        self.S_nu = self.dnu_dz * self.__params.p_total + self.nu * self.__params.dp_dz + \
+                    np.sum((self.void_term * self.__params.kl_matrix * self.delta_q_matrix -
+                            self.pi_diffusion_matrix), axis=1)

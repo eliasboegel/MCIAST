@@ -59,5 +59,6 @@ class OrderOfAccuracy:
         order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
         return order_of_accuracy, discretization_list
 
-ooa = OrderOfAccuracy(which="Space", n=100, dt=0.001)
+
+ooa = OrderOfAccuracy(which="Space", n=5, dt=0.001)
 print(ooa.analysis()[0])
