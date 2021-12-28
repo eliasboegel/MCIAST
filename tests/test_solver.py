@@ -2,7 +2,9 @@ import unittest
 
 import numpy as np
 
-from solver import *
+from src.linearized_system import LinearizedSystem
+from src.solver import Solver
+from src.system_parameters import SysParams
 
 
 class TestSolver(unittest.TestCase):
@@ -10,26 +12,25 @@ class TestSolver(unittest.TestCase):
     def test_initialize_params_correct(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False,
-                           dimensionless=False)
+                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, dispersion_helium=8)
         self.assertEqual(params.t_end, 8)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
         self.assertEqual(params.p_in, 5.0)
         self.assertEqual(params.p_out, 5.0)
-        np.testing.assert_array_equal(params.p_total, [5.0] * 11)
+        np.testing.assert_array_equal(params.p_total, [5.0] * 10)
         self.assertEqual(params.n_points, 11)
-        np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8]))
+        np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8, 0.0]))
         self.assertEqual(params.temp, 313)
         self.assertEqual(params.void_frac, 0.6)
         self.assertEqual(params.rho_p, 2)
-        np.testing.assert_array_equal(params.kl, np.asarray([12, 16]))
-        np.testing.assert_array_equal(params.disp, np.asarray([2, 1]))
+        np.testing.assert_array_equal(params.kl, np.asarray([12, 16, 0]))
+        np.testing.assert_array_equal(params.disp, np.asarray([2, 1, 1]))
         self.assertEqual(params.c_len, 1)
         self.assertEqual(params.dz, 0.1)
         self.assertEqual(params.dp_dz, 0)
         self.assertEqual(params.v_in, 1)
-        self.assertEqual(params.n_components, 2)
+        self.assertEqual(params.n_components, 3)
 
     def test_initialize_solver(self):
         n_points = 3
@@ -42,7 +43,7 @@ class TestSolver(unittest.TestCase):
         print("Matrix G: ", solver.g_matrix)
         print("Matrix L: ", solver.l_matrix)
         print("Matrix D: ", solver.d_matrix)
-        print("Vector B: ", solver.b_vector)
+        print("Vector B: ", solver.b_v_vector)
         np.testing.assert_allclose(solver.g_matrix, [[0., 4., 0.],
                                                      [-4., 0., 4.],
                                                      [4., -16., 12.]], 1e-5)
@@ -52,7 +53,7 @@ class TestSolver(unittest.TestCase):
         np.testing.assert_allclose(solver.d_matrix, [[0.00192139, 0.00768556],
                                                      [0., 0.],
                                                      [0., 0.]], 1e-5)
-        np.testing.assert_allclose(solver.b_vector, [-1., 0., 0.])
+        np.testing.assert_allclose(solver.b_v_vector, [-1., 0., 0.])
 
     def test_caclulate_dp_dt1(self):
         """
@@ -97,9 +98,9 @@ class TestSolver(unittest.TestCase):
 
     def test_solve_function(self):
         params = SysParams()
-        params.init_params(t_end=1e-4, dt=1e-7, y_in=np.asarray([0.5, 0.5]), n_points=5, p_in=1000, temp=313,
-                           c_len=1, u_in=1, void_frac=0.995, disp=[0, 0], kl=[5, 5], rho_p=500, append_helium=True,
-                           p_out=5000, dimensionless=True)
+        params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=1000, p_in=2e5, temp=298,
+                           c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47], rho_p=1000,
+                           p_out=2e5, time_stepping="BE", dimensionless=True, dispersion_helium=0.004)
         solver = Solver(params)
         # ls = LinearizedSystem(solver, params)
         # ls.get_estimated_dt()
@@ -109,9 +110,10 @@ class TestSolver(unittest.TestCase):
     def test_Linearized_Class(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=1000, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, append_helium=True,
-                           p_out=5.0)
+                           c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=500, p_out=5.0)
         solver = Solver(params)
         lin_sys = LinearizedSystem(solver, params)
         lin_sys.get_stiffness_estimate()
         lin_sys.get_estimated_dt()
+
+
