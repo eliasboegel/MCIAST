@@ -3,6 +3,7 @@ import scipy.sparse as sp
 import scipy.optimize as opt
 from src import iast
 from src.mms import MMS
+from src.plotter import *
 
 
 class Solver:
@@ -147,7 +148,10 @@ class Solver:
         # print("Another internal iteration...")
         return du_dt
 
-    def solve(self):
+    def solve(self, plot=True):
+
+        plotter = Plotter()
+
         def crank_nicolson(u_new, u_old):
             return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, t + self.params.dt) +
                                                    self.calculate_dudt(u_old, t)) - u_new
@@ -182,6 +186,9 @@ class Solver:
             if not self.verify_pressures(u_1[0:self.params.n_points - 1]):
                 print("The sum of partial pressures is not equal to 1!")
 
+            if plot:
+                print(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
+                plotter.plot_loadings(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
             # Calculate derivative to check convergence
             du_dt = (u_1 - u_0) / self.params.dt
 
