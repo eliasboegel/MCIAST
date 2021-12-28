@@ -70,6 +70,7 @@ class SysParams:
         :param c_len: Column length.
         :param u_in: Speed at the inlet.
         :param void_frac: Void fraction (epsilon).
+        :param dispersion_helium: dispersion coefficient for helium
         :param disp: Array containing dispersion coefficient for every component.
         :param kl: Array containing effective mass transport coefficient of every component.
         :param rho_p: Density of the adsorbent.
@@ -81,12 +82,13 @@ class SysParams:
 
         self.R = 8.314
 
+        # Append helium to the list of gases
         y_in = np.append(y_in, 0)
         kl = np.append(kl, 0)
         disp = np.append(disp, dispersion_helium)
 
         if dimensionless:
-            # Dimensionless points in time
+            # Dimensionless quantities
             self.t_end = t_end * u_in / c_len
             self.dt = dt * u_in / c_len
             self.nt = self.t_end / self.dt
@@ -95,6 +97,7 @@ class SysParams:
             self.disp = np.asarray(disp) / (c_len * u_in)
 
         else:
+            # Quantities with dimensions
             self.t_end = t_end
             self.dt = dt
             self.nt = self.t_end / self.dt
@@ -102,14 +105,15 @@ class SysParams:
             self.kl = np.asarray(kl)
             self.disp = np.asarray(disp)
 
-        # The number of components assessed based on the length of y_in array
+        # The number of components assessed based on the length of y_in array (so that it includes helium)
         self.n_components = self.y_in.shape[0]
 
-        # Pressure at the inlet is also equal to the total pressure at each point of the grid
+        # Specify inlet and outlet pressures and number of points
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
 
+        # Throw an Exception if mole fractions do not equal to 1
         if np.sum(y_in) != 1:
             raise Exception("Sum of mole fractions is not equal to 1")
         if temp < 0:
@@ -117,6 +121,8 @@ class SysParams:
         self.temp = temp
         if not 0 <= void_frac <= 1:
             raise Exception("Void fraction is incorrect")
+
+        # Specify more constants
         self.void_frac = void_frac
         self.rho_p = rho_p
         # Used to calculate velocity
@@ -129,20 +135,36 @@ class SysParams:
         # Dimensionless inlet velocity (always 1)
         self.v_in = 1
 
-        # MMS stuff
-        self.xi = np.linspace(0, self.c_len, self.n_points)[1:]
+        # Parameters for running dynamic code verification using MMS
+        self.mms = mms
         if self.mms is True:
+            self.mms_mode = mms_mode
+            self.mms_conv_factor = mms_convergence_factor
+            self.ms_pt_distribution = ms_pt_distribution
+            if dimensionless is False:
+                raise Warning("mms must be initialized with dimensionless set to True")
+        if type(self.mms) != bool:
+            raise Warning("mms must be either True or False")
+
+        # Create array holding nodes coordinates (without node 0)
+        self.xi = np.linspace(0, self.c_len, self.n_points)[1:]
+        # Set total pressures and its gradient for MMS
+        if self.mms is True:
+            # If total pressure is constant over xi, set it to 1 and its gradient to 0
             if self.ms_pt_distribution == "constant":
                 self.p_total = 1
                 self.dp_dz = 0
+            # If total pressure is not constant over xi, set it and its gradient
             elif self.ms_pt_distribution == "linear":
                 self.p_total = 1 - self.xi / 2
                 self.dp_dz = - 1/2
             else:
                 self.p_total = 1
                 raise Warning("ms_pt_distribution needs to be either constant or linear!")
+            # Set MMS partial pressures at the inlet to total pressure divided over components
             self.p_partial_in = np.full(self.n_components, 1/self.n_components)
 
+        # Set inlet pressure, total pressure and its gradient (in case MMS is not initialized)
         else:
             self.p_partial_in = self.y_in * p_in
             self.p_total = np.linspace(p_in, p_out, n_points)[1:]
@@ -156,7 +178,7 @@ class SysParams:
         elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
 
-        # Determine the magnitude of errors
+        # Determine the magnitude of error to be set for convergence and for linear solver
         self.time_stepping = time_stepping
         if self.time_stepping == "BE" or self.time_stepping == "FE":
             self.dis_error = max(self.dz ** 2, self.dt ** 2)
@@ -166,20 +188,11 @@ class SysParams:
             raise Warning("Only FE, BE, CN methods can be used!")
         self.ls_error = self.dis_error / 100
 
-        # Parameters for running dynamic code verification using MMS
-        self.mms = mms
-        if self.mms is True:
-            self.mms_mode = mms_mode
-            self.mms_conv_factor = mms_convergence_factor
-            self.ms_pt_distribution = ms_pt_distribution
-            if dimensionless is False:
-                raise Warning("mms must be initialized with dimensionless set to True")
-        if type(self.mms) != bool:
-            raise Warning("mms must be either True or False")
-
+        # IAST stuff
         dirpath = os.path.abspath(os.path.dirname(__file__))
         self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
 
+        # Initialize matrices with parameters set
         self.initialize_matrices()
 
     def initialize_matrices(self):
@@ -193,7 +206,7 @@ class SysParams:
         self.disp_matrix = np.broadcast_to(self.disp, (self.n_points - 1, self.n_components))
         print("disp_matrix is", self.disp_matrix)
 
-        # System matrices
+        # Gradient matrix
         self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1)
         self.g_matrix[-1, -3] = 1.0
@@ -203,11 +216,13 @@ class SysParams:
         self.g_matrix = self.g_matrix / (2.0 * self.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
 
+        # F matrix for calculating velocity
         self.f_matrix = np.diag(self.dp_dz / self.p_total)
         # # print(f"f_matrix: {self.f_matrix}")
         self.f_matrix = sp.csr_matrix(self.f_matrix)
         # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
+        # Laplacian operator matrix
         self.l_matrix = np.diag(np.full(self.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1) + np.diag(np.full(self.n_points - 1, -2.0), 0)
         if self.outlet_boundary_type == "Neumann":
@@ -222,12 +237,14 @@ class SysParams:
         self.l_matrix = sp.csr_matrix(self.l_matrix)
         # print(f"l_matrix {self.l_matrix.toarray()}")
 
+        # Create matrix for material balance equation for storing inlet boundary condition
         self.d_matrix = np.zeros((self.n_points - 1, self.n_components), dtype="float")
         first_row = self.p_partial_in * (
                 (self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
+        # Create vector for velocity equation for storing inlet boundary condition
         self.b_v_vector = np.zeros(self.n_points - 1)
         # print(self.b_vector)
         self.b_v_vector[0] = - self.v_in / (2 * self.dz)

@@ -3,6 +3,7 @@ import numpy as np
 
 class MMS:
     def __init__(self, sys_params):
+        # nu = velocity, pi = partial pressure, z = xi
         # Initialize other classes as attributes
         self.__params = sys_params
         # Initialize 1D dummy arrays as attributes
@@ -16,7 +17,7 @@ class MMS:
         self.dnupi_dz = np.zeros(self.__params.n_points - 1)
         self.q_eq = np.zeros(self.__params.n_points - 1)
         self.q_ads = np.zeros(self.__params.n_points - 1)
-        # Initialize 2D arrays as attributes
+        # Initialize 2D arrays (that will be used to create source functions) as attributes
         self.S_pi = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.pi_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.dpi_dz_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
@@ -29,55 +30,66 @@ class MMS:
         self.pi_diffusion_matrix = np.zeros((self.__params.n_points - 1, self.__params.n_components))
         self.a = 0
         self.b = 0
-        # Initialize constants as attributes
+        # Initialize constants as attributes. b equal to 0 makes the MS to be constant in time.
         if self.__params.mms_mode == "steady":
             self.b = 0
         elif self.__params.mms_mode == "transient":
             self.b = 1
         else:
             raise Warning("mms_mode needs to be either transient or steady!")
+        # a equal to zero makes the total pressure to be linear in space
         if self.__params.ms_pt_distribution == "constant":
             self.a = 0
         elif self.__params.ms_pt_distribution == "linear":
             self.a = 1
         else:
             raise Warning("ms_pt_distribution needs to be either constant or linear!")
+        # Specify other constants
         self.c = self.__params.mms_conv_factor
         self.t_factor = 0
         self.RT = self.__params.R * self.__params.temp
         self.void_term = self.__params.void_frac_term * self.RT
 
+    # Calculate partial pressure over xi for component i
     def calculate_pi_ms(self, i):
         self.pi = self.__params.p_total/self.__params.n_components + (-1) ** i * (np.sin(np.pi / 2 * self.__params.xi) +
                                            self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
+    # Calculate velocity over xi
     def calculate_nu_ms(self):
         self.nu = self.__params.v_in - 0.5 * np.sin(np.pi / 2 * self.__params.xi) + \
                   self.b * self.t_factor * np.sin(np.pi * self.__params.xi) ** 2
 
+    # Calculate adsorbed loading over xi for component i at time tau
     def calculate_q_ads_ms(self, tau, i):
         self.q_ads = self.b * self.__params.kl[i] * self.__params.xi * tau * self.t_factor
 
+    # Do the same thing for equivalent loading (it depends on adsorbed loading, hence on time, xi and component as well)
     def calculate_q_eq_ms(self, tau):
         self.q_eq = self.b * self.__params.xi * (self.t_factor - tau * self.t_factor / self.c) + self.q_ads
 
+    # Calculate gradient of partial pressure over xi for component i
     def calculate_dpi_dz_ms(self, i):
         self.dpi_dz = -self.a / (2 * self.__params.n_components) + \
                       (-1) ** i * np.pi * (0.5 * np.cos(np.pi / 2 * self.__params.xi) +
                                            self.b * self.t_factor * np.cos(np.pi * self.__params.xi))
 
+    # Calculate second derivative of partial pressure over xi for component i
     def calculate_d2pi_dz2_ms(self, i):
         self.d2pi_dz2 = -(-1) ** i * np.pi ** 2 * (0.25 * np.sin(np.pi / 2 * self.__params.xi) +
                                                    self.b * self.t_factor * np.sin(np.pi * self.__params.xi))
 
+    # Calculate derivative of partial pressure with respect to time for component i
     def calculate_dpi_dt_ms(self, i):
         self.dpi_dt = self.b * (-(-1) ** i * self.t_factor * np.sin(np.pi * self.__params.xi)) / self.c
 
+    # Calculate derivative of velocity with respect to xi
     def calculate_dnu_dz_ms(self):
         self.dnu_dz = np.pi * (-0.25 * np.cos(np.pi / 2 * self.__params.xi) +
                                self.b * 2 * self.t_factor * np.sin(np.pi * self.__params.xi) * np.cos(
                     np.pi * self.__params.xi))
 
+    # Calculate derivative of nu times partial pressure with respect to xi
     def calculate_dnupi_dz(self):
         self.dnupi_dz = self.pi * self.dnu_dz + self.nu * self.dpi_dz
 
@@ -110,6 +122,7 @@ class MMS:
             # Update equivalent loading
             self.calculate_q_eq_ms(tau)
             self.q_eq_matrix[:, i] = np.copy(self.q_eq)
+        # Assemble source terms to be used with the system of PDEs
         self.delta_q_matrix = self.q_eq_matrix - self.q_ads_matrix
         self.pi_diffusion_matrix = self.d2pi_dz2_matrix * self.__params.disp_matrix
         self.S_pi = self.dpi_dt_matrix + self.dnupi_dz_matrix - self.pi_diffusion_matrix + \
