@@ -21,11 +21,11 @@ def plot(loading_matrix):
         plt.draw
         
     #Clear the plot 
-    plt.pause(0.0001)  #For some reason id does not work without this pause 
+    plt.pause(0.0001)  #For some reason it does not work without this pause 
     plt.clf()       
 
 #Making test data
-for move in range(200):
+for move in range(100):
     move = move/50
     tgrid = 50
     space = np.linspace(0+move,6.28+move,num=tgrid)
