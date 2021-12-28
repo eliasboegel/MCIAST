@@ -210,7 +210,7 @@ class SysParams:
         self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1)
         self.g_matrix[-1, -3] = 1.0
-        self.g_matrix[-1, -2] = -4.0
+        self.g_matrix[-1, -2] = -2.0 # This is correct, documentation is wrong
         self.g_matrix[-1, -1] = 3.0
         print("initial g_matrix is", self.g_matrix)
         self.g_matrix = self.g_matrix / (2.0 * self.dz)

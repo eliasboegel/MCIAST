@@ -12,26 +12,25 @@ class TestSolver(unittest.TestCase):
     def test_initialize_params_correct(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, append_helium=False,
-                           dimensionless=False)
+                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, dispersion_helium=8)
         self.assertEqual(params.t_end, 8)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
         self.assertEqual(params.p_in, 5.0)
         self.assertEqual(params.p_out, 5.0)
-        np.testing.assert_array_equal(params.p_total, [5.0] * 11)
+        np.testing.assert_array_equal(params.p_total, [5.0] * 10)
         self.assertEqual(params.n_points, 11)
-        np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8]))
+        np.testing.assert_array_equal(params.y_in, np.asarray([0.2, 0.8, 0.0]))
         self.assertEqual(params.temp, 313)
         self.assertEqual(params.void_frac, 0.6)
         self.assertEqual(params.rho_p, 2)
-        np.testing.assert_array_equal(params.kl, np.asarray([12, 16]))
-        np.testing.assert_array_equal(params.disp, np.asarray([2, 1]))
+        np.testing.assert_array_equal(params.kl, np.asarray([12, 16, 0]))
+        np.testing.assert_array_equal(params.disp, np.asarray([2, 1, 1]))
         self.assertEqual(params.c_len, 1)
         self.assertEqual(params.dz, 0.1)
         self.assertEqual(params.dp_dz, 0)
         self.assertEqual(params.v_in, 1)
-        self.assertEqual(params.n_components, 2)
+        self.assertEqual(params.n_components, 3)
 
     def test_initialize_solver(self):
         n_points = 3

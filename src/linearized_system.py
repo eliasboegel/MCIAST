@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import scipy.optimize as opt
 
+# NEEDS TO BE CHANGED
 class LinearizedSystem:
     def __init__(self, solver, sys_params):
         self.solver = solver
