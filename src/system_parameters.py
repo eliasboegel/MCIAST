@@ -47,7 +47,7 @@ class SysParams:
         self.b_v_vector = 0
         self.xi = 0
 
-    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p, dispersion_helium,
+    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
@@ -81,11 +81,6 @@ class SysParams:
         """
 
         self.R = 8.314
-
-        # Append helium to the list of gases
-        y_in = np.append(y_in, 0)
-        kl = np.append(kl, 0)
-        disp = np.append(disp, dispersion_helium)
 
         if dimensionless:
             # Dimensionless quantities
