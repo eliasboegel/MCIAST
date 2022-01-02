@@ -65,7 +65,7 @@ class TestMMS(unittest.TestCase):
         np.testing.assert_allclose(mms.dpi_dz_matrix,
                                    np.array([[3.336269939, -3.586269939, 3.336269939, -3.586269939],
                                             [0.9857207345, -1.235720735, 0.9857207345, -1.235720735],
-                                            [-1.533926633, 1.283925633, -1.533926633, 1.283925633],
+                                            [-1.533925633, 1.283925633, -1.533925633, 1.283925633],
                                             [-2.967630585, 2.717630585, -2.967630585, 2.717630585]]), atol=1e-9)
 
     def test_d2pi_dz2_calculation(self):
@@ -94,7 +94,7 @@ class TestMMS(unittest.TestCase):
         mms = MMS(params)
         mms.update_source_functions(100)
 
-        np.testing.assert_allclose(mms.nu, np.array([0.3562395748, -0.2583908086, 0.08564152472, 0.5]), atol=1e-9)
+        np.testing.assert_allclose(mms.nu, np.array([1.261076993, 1.551284027, 0.9904789428, 0.5]), atol=1e-9)
 
     def test_dnu_dz_calculation(self):
         params = SysParams()
@@ -119,9 +119,9 @@ class TestMMS(unittest.TestCase):
         mms.update_source_functions(100)
 
         np.testing.assert_allclose(mms.dnupi_dz_matrix,
-                                   np.array([[3.81625933, -2.979124156, 3.81625933, -2.979124156],
-                                             [-1.254041169, 1.110378733, -1.254041169, 1.110378733],
-                                             [-5.537484588, 4.533827418, -5.537484588, 4.533827418],
+                                   np.array([[6.835041208, -6.224115387, 6.835041208, -6.224115387],
+                                             [0.5297928392, -1.125873984, 0.5297928392, -1.125873984],
+                                             [-6.925437812, 5.695571373, -6.925437812, 5.695571373],
                                              [-1.483815283, 1.358815293, -1.483815283, 1.358815293]]), atol=1e-9)
 
     def test_S_nu_calculation(self):
