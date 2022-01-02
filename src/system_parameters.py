@@ -45,6 +45,7 @@ class SysParams:
         self.l_matrix = 0
         self.d_matrix = 0
         self.b_v_vector = 0
+        self.e_vector = 0
         self.xi = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
@@ -166,9 +167,9 @@ class SysParams:
             self.dp_dz = (p_out - p_in) / self.c_len
 
         # Parameters for outlet boundary condition
-        if self.p_in == self.p_out:
+        if self.p_in == self.p_out or self.ms_pt_distribution == "constant":
             self.outlet_boundary_type = "Neumann"
-        elif self.p_in != self.p_out:
+        elif self.p_in != self.p_out or self.ms_pt_distribution == "linear":
             self.outlet_boundary_type = "Numerical"
         elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
@@ -238,6 +239,10 @@ class SysParams:
                 (self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
+
+        # Create matrix for inlet boundary condition for laplacian operator on partial pressures
+        self.e_vector = np.zeros(self.n_points - 1)
+        self.e_vector[0] = - np.sum(self.p_partial_in * self.disp)
 
         # Create vector for velocity equation for storing inlet boundary condition
         self.b_v_vector = np.zeros(self.n_points - 1)
