@@ -103,6 +103,8 @@ class SysParams:
 
         # The number of components assessed based on the length of y_in array (so that it includes helium)
         self.n_components = self.y_in.shape[0]
+        if self.mms is True and (self.n_components % 2) != 0:
+            raise Warning("Number of components for MMS must be even ")
 
         # Specify inlet and outlet pressures and number of points
         self.p_in = p_in
@@ -153,12 +155,12 @@ class SysParams:
             # If total pressure is not constant over xi, set it and its gradient
             elif self.ms_pt_distribution == "linear":
                 self.p_total = 1 - self.xi / 2
-                self.dp_dz = - 1/2
+                self.dp_dz = - 1 / 2
             else:
                 self.p_total = 1
                 raise Warning("ms_pt_distribution needs to be either constant or linear!")
             # Set MMS partial pressures at the inlet to total pressure divided over components
-            self.p_partial_in = np.full(self.n_components, 1/self.n_components)
+            self.p_partial_in = np.full(self.n_components, 1 / self.n_components)
 
         # Set inlet pressure, total pressure and its gradient (in case MMS is not initialized)
         else:
@@ -167,9 +169,9 @@ class SysParams:
             self.dp_dz = (p_out - p_in) / self.c_len
 
         # Parameters for outlet boundary condition
-        if self.p_in == self.p_out or self.ms_pt_distribution == "constant":
+        if self.p_in == self.p_out or (self.ms_pt_distribution == "constant" and self.mms is True):
             self.outlet_boundary_type = "Neumann"
-        elif self.p_in != self.p_out or self.ms_pt_distribution == "linear":
+        elif self.p_in != self.p_out or (self.ms_pt_distribution == "linear" and self.mms is True):
             self.outlet_boundary_type = "Numerical"
         elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")

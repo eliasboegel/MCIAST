@@ -26,11 +26,11 @@ class OrderOfAccuracy:
         ss_params = SysParams()
         for (dt, nodes) in discretization_list:
             # Set ss_params with tighter discretization for each run
-            ss_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.4, 0.3, 0.3]), n_points=nodes, p_in=2e5,
-                                  temp=298, c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004, 0.004],
-                                  kl=[4.35, 1.4, 1.4], rho_p=1000, p_out=1.99e5, time_stepping="BE", dimensionless=True,
-                                  mms=True,  ms_pt_distribution="linear", mms_mode="steady",
-                                  mms_convergence_factor=1000)
+            ss_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=nodes,
+                                  p_in=2e5, temp=298, c_len=1, u_in=1, void_frac=0.995,
+                                  disp=[0.004, 0.004, 0.004, 0.004], kl=[1.4, 1.4, 1.4, 1.4], rho_p=1000, p_out=1.99e5,
+                                  time_stepping="BE", dimensionless=True, mms=True,  ms_pt_distribution="linear",
+                                  mms_mode="steady", mms_convergence_factor=1000)
             ss_solver = Solver(ss_params)
             error_matrix = None
             if self.type == "Space":
@@ -52,11 +52,11 @@ class OrderOfAccuracy:
             elif self.type == "Time":
                 # Create time parameters and solver
                 t_params = SysParams()
-                t_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.4, 0.3, 0.3]), n_points=nodes, p_in=2e5,
-                                     temp=298, c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004, 0.004],
-                                     kl=[4.35, 1.4, 1.4], rho_p=1000, p_out=2e5, time_stepping="BE", dimensionless=True,
-                                     mms=True,  ms_pt_distribution="linear", mms_mode="transient",
-                                     mms_convergence_factor=1000)
+                t_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=nodes,
+                                     p_in=2e5, temp=298, c_len=1, u_in=1, void_frac=0.995,
+                                     disp=[0.004, 0.004, 0.004, 0.004], kl=[1.4, 1.4, 1.4, 1.4], rho_p=1000,
+                                     p_out=1.99e5, time_stepping="BE", dimensionless=True, mms=True,
+                                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
                 t_solver = Solver(t_params)
 
                 # Get the calculated solution
@@ -81,5 +81,5 @@ class OrderOfAccuracy:
         return order_of_accuracy, discretization_list
 
 
-ooa = OrderOfAccuracy(which="Space", n=30, dt=0.001, r=2)
+ooa = OrderOfAccuracy(which="Space", n=500, dt=0.001, r=2)
 print(ooa.analysis()[0])
