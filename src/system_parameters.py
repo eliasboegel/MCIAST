@@ -105,9 +105,9 @@ class SysParams:
             self.disp = np.asarray(disp)
 
         # Appending the parameters of helium to the component arrays
-        np.append(kl, kl_helium)
-        np.append(y_in, y_helium)
-        np.append(disp, disp_helium)
+        self.kl = np.append(self.kl, kl_helium)
+        self.y_in = np.append(self.y_in, y_helium)
+        self.disp = np.append(self.disp, disp_helium)
 
         # The number of components assessed based on the length of y_in array (so that it includes helium)
         self.n_components = self.y_in.shape[0]
@@ -204,11 +204,11 @@ class SysParams:
 
         # Dimensionless mass transfer coefficients matrix
         self.kl_matrix = np.broadcast_to(self.kl, (self.n_points - 1, self.n_components))
-        print("kl_matrix is", self.kl_matrix)
+        # print("kl_matrix is", self.kl_matrix)
 
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.disp, (self.n_points - 1, self.n_components))
-        print("disp_matrix is", self.disp_matrix)
+        # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
         self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
@@ -216,7 +216,7 @@ class SysParams:
         self.g_matrix[-1, -3] = 1.0
         self.g_matrix[-1, -2] = -4.0
         self.g_matrix[-1, -1] = 3.0
-        print("initial g_matrix is", self.g_matrix)
+        # print("initial g_matrix is", self.g_matrix)
         self.g_matrix = self.g_matrix / (2.0 * self.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
 
@@ -236,7 +236,7 @@ class SysParams:
             self.l_matrix[-1, -3] = 4.0
             self.l_matrix[-1, -2] = -5.0
             self.l_matrix[-1, -1] = 2.0
-        print("initial l_matrix is", self.l_matrix)
+        # print("initial l_matrix is", self.l_matrix)
         self.l_matrix /= self.dz ** 2
         self.l_matrix = sp.csr_matrix(self.l_matrix)
         # print(f"l_matrix {self.l_matrix.toarray()}")
