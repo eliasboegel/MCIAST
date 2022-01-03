@@ -48,15 +48,17 @@ class SysParams:
         self.xi = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
-                    t_end=40, dt=0.001, time_stepping="BE", dimensionless=True, mms=False,
+                    t_end=40, dt=0.001, y_helium=0, disp_helium=0, kl_helium=0, time_stepping="BE", dimensionless=True,
+                    mms=False,
                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
-        and the initial conditions. Depending on the dimensionless paramter, the variables might turned into the
+        and the initial conditions. Depending on the dimensionless parameter, the variables might turned into the
         dimensionless equivalents. The presence of helium is implicit. It means that it is always present no matter
         what parameters are passed. Its pressure is equal to the pressure of all components at the inlet.
         Therefore, the number of components is always len(y_in)+1.
+
 
         :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
@@ -70,10 +72,12 @@ class SysParams:
         :param c_len: Column length.
         :param u_in: Speed at the inlet.
         :param void_frac: Void fraction (epsilon).
-        :param dispersion_helium: dispersion coefficient for helium
         :param disp: Array containing dispersion coefficient for every component.
         :param kl: Array containing effective mass transport coefficient of every component.
         :param rho_p: Density of the adsorbent.
+        :param kl_helium: mass transfer coefficient of helium, should be 0 by default
+        :param disp_helium: dispersion coefficient of helium
+        :param y_helium: mole fraction of helium at the inlet, should be 0 by default
         :param mms: Choose if dynamic code testing is switched on.
         :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
         :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
@@ -99,6 +103,11 @@ class SysParams:
             self.y_in = np.asarray(y_in)
             self.kl = np.asarray(kl)
             self.disp = np.asarray(disp)
+
+        # Appending the parameters of helium to the component arrays
+        np.append(kl, kl_helium)
+        np.append(y_in, y_helium)
+        np.append(disp, disp_helium)
 
         # The number of components assessed based on the length of y_in array (so that it includes helium)
         self.n_components = self.y_in.shape[0]
@@ -152,12 +161,12 @@ class SysParams:
             # If total pressure is not constant over xi, set it and its gradient
             elif self.ms_pt_distribution == "linear":
                 self.p_total = 1 - self.xi / 2
-                self.dp_dz = - 1/2
+                self.dp_dz = - 1 / 2
             else:
                 self.p_total = 1
                 raise Warning("ms_pt_distribution needs to be either constant or linear!")
             # Set MMS partial pressures at the inlet to total pressure divided over components
-            self.p_partial_in = np.full(self.n_components, 1/self.n_components)
+            self.p_partial_in = np.full(self.n_components, 1 / self.n_components)
 
         # Set inlet pressure, total pressure and its gradient (in case MMS is not initialized)
         else:

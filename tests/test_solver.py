@@ -13,14 +13,14 @@ class TestSolver(unittest.TestCase):
         params = SysParams()
         params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=n_points, p_in=2e5, temp=298,
                            c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47], rho_p=1000,
-                           p_out=2e5, time_stepping="BE", dimensionless=True, dispersion_helium=0.004)
+                           p_out=2e5, time_stepping="BE", dimensionless=True, disp_helium=0.004)
         solver = Solver(params)
         return solver
 
     def test_initialize_params_correct(self):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=11, p_in=5.0, p_out=5.0, temp=313,
-                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, dispersion_helium=8)
+                           c_len=4, u_in=2, void_frac=0.6, disp=[16, 8], kl=[6, 8], rho_p=2, dispe_helium=8)
         self.assertEqual(params.t_end, 8)
         self.assertEqual(params.dt, 0.0005)
         self.assertEqual(params.nt, 8000)
@@ -69,7 +69,8 @@ class TestSolver(unittest.TestCase):
         """
         solver = self.initialize_solver(n_points=4)
 
-        dp_dt = solver.calculate_dp_dt(np.asarray([1, 1, 1]), np.asarray([[1e5, 1e5, 1e5], [0.5e5, 1.5e5, 1e5], [0.6e5, 1.4e5, 1e5]]),
+        dp_dt = solver.calculate_dp_dt(np.asarray([1, 1, 1]),
+                                       np.asarray([[1e5, 1e5, 1e5], [0.5e5, 1.5e5, 1e5], [0.6e5, 1.4e5, 1e5]]),
                                        np.asarray([[1e-3, 1e-4, 0], [1e-3, 5e-4, 0], [5e-4, 6e-4, 0]]),
                                        np.asarray([[1e-4, 1e-5, 0], [1e-4, 1e-3, 0], [1e-4, 1e-4, 0]]))
         # Use this to test in Wolfram Alpha
