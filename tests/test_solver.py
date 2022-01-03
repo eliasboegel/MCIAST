@@ -51,34 +51,50 @@ class TestSolver(unittest.TestCase):
         print("Matrix D: ", solver.params.d_matrix)
         print("Vector B: ", solver.params.b_v_vector)
         np.testing.assert_allclose(solver.params.g_matrix.toarray(), np.asarray([[0., 1.5, 0.],
-                                                                        [-1.5, 0., 1.5],
-                                                                        [1.5, -6., 4.5]], dtype=float), 1e-5)
+                                                                                 [-1.5, 0., 1.5],
+                                                                                 [1.5, -6., 4.5]], dtype=float), 1e-5)
         np.testing.assert_allclose(solver.params.l_matrix.toarray(), np.asarray([[-18., 9., 0.],
-                                                                        [9., -18., 9.],
-                                                                        [0., 18., -18.]], dtype=float), 1e-5)
+                                                                                 [9., -18., 9.],
+                                                                                 [0., 18., -18.]], dtype=float), 1e-5)
         np.testing.assert_allclose(solver.params.d_matrix, np.asarray([[10.5, 42.0, 0.],
-                                                                        [0., 0., 0.],
-                                                                        [0., 0., 0.]], dtype=float), 1e-5)
+                                                                       [0., 0., 0.],
+                                                                       [0., 0., 0.]], dtype=float), 1e-5)
         np.testing.assert_allclose(solver.params.b_v_vector, [-1.5, 0., 0.])
+        np.testing.assert_allclose(solver.params.kl, np.asarray([1, 1, 0]))
+        np.testing.assert_allclose(solver.params.disp, np.asarray([1, 1, 1]))
+        np.testing.assert_allclose(solver.params.y_in, np.asarray([0.2, 0.8, 0]))
 
     def test_caclulate_dp_dt1(self):
         """
         Case in which kl and disp are identical for each component and equal to 1.
         """
         solver = self.initialize_solver(n_points=4)
-
-        dp_dt = solver.calculate_dp_dt(np.asarray([1, 1, 1]),
-                                       np.asarray([[1e5, 1e5, 1e5], [0.5e5, 1.5e5, 1e5], [0.6e5, 1.4e5, 1e5]]),
-                                       np.asarray([[1e-3, 1e-4, 0], [1e-3, 5e-4, 0], [5e-4, 6e-4, 0]]),
-                                       np.asarray([[1e-4, 1e-5, 0], [1e-4, 1e-3, 0], [1e-4, 1e-4, 0]]))
-        # Use this to test in Wolfram Alpha
-        # -(Divide[1,0.25])*{{0,1,0},{-1,0,1},{1,-4,3}}{{0.3,0.7},{0.7,1.3},{0.4,0.6}}+(Divide[1,0.25])*{{-2,1,0},
-        # {1,-2,1},{0,2,-2}}{{0.3,0.7},{0.35,0.65},{0.4,0.6}}- Divide[\(40)1-0.6\(41),0.6]*2*8.314*313
-        # {{0.5,0.5},{1,1},{1,1}}+{{0.00192139,0.00768556},{0,0},{0,0}}
-        # np.testing.assert_allclose(dp_dt, np.asarray([[-3470.109333, -3469.309333],
-        #                                              [-3464.909333, -3458.509333]]), 1e-1)
-        # Unfinished
-        print("dp_dt: ", dp_dt)
+        velocities = np.asarray([1, 1, 1])
+        p_partial = np.asarray([[1e5, 1e5, 1e5], [0.5e5, 1.5e5, 1e5], [0.6e5, 1.4e5, 1e5]])
+        q_eq = np.asarray([[1e-3, 1e-4, 0], [1e-3, 5e-4, 0], [5e-4, 6e-4, 0]])
+        q_ads = np.asarray([[1e-4, 1e-5, 0], [1e-4, 1e-3, 0], [1e-4, 1e-4, 0]])
+        # print("Matrix G: ", solver.params.g_matrix.toarray())
+        # print("Matrix L: ", solver.params.l_matrix.toarray())
+        # print("Matrix D: ", solver.params.d_matrix)
+        # print("Vector B: ", solver.params.b_v_vector)
+        # print("Advection term= :", -solver.params.g_matrix.dot(p_partial))
+        # print("Dispersion_term= ",
+        #       np.multiply(solver.params.l_matrix.dot(p_partial), np.asarray([0.004, 0.004, 0.004])))
+        # print("Adsorpotion term= ",
+        #       -8.314 * 298 * ((1 - 0.995) / 0.995) * 1000 * np.multiply(np.asarray([4.35, 1.47, 0.]),
+        #                                                                 q_eq - q_ads) + solver.params.d_matrix)
+        # print("Final= ",
+        #       -solver.params.g_matrix.dot(p_partial) + np.multiply(solver.params.l_matrix.dot(p_partial),
+        #                                                            np.asarray([0.004, 0.004, 0.004])) - 8.314 * 298 * (
+        #               (1 - 0.995) / 0.995) * 1000 * np.multiply(np.asarray([4.35, 1.47, 0.]),
+        #                                                         q_eq - q_ads) + solver.params.d_matrix)
+        dp_dt = solver.calculate_dp_dt(velocities,
+                                       p_partial,
+                                       q_eq,
+                                       q_ads)
+        np.testing.assert_allclose(dp_dt, np.asarray([[73151.25781719, -73201.64714963, -153600.],
+                                                      [62111.25781719, -62150.84916874, 0.],
+                                                      [-120741.66319236, 120710.84916874, 0.]]), 1e-1)
 
     def test_calculate_velocity(self):
         """

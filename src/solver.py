@@ -66,6 +66,9 @@ class Solver:
         dispersion_term = np.multiply(self.params.disp_matrix, self.params.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.params.R * self.params.void_frac_term * \
                           np.multiply(self.params.kl_matrix, q_eq - q_ads) + self.params.d_matrix
+        print("Advection term= :", advection_term)
+        print("Dispersion_term= ", dispersion_term)
+        print("Adsorpotion term= ", adsorption_term)
         # Add up main terms of the equation
         if self.params.mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
