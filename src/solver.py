@@ -127,6 +127,8 @@ class Solver:
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
+            print("S_pi matrix is:", self.MMS.S_pi)
+            print("S_nu matrix is:", self.MMS.S_nu)
             q_eq = self.MMS.q_eq_matrix
         # Calculate new loadings
         else:

@@ -70,12 +70,12 @@ class OrderOfAccuracy:
                 error_matrix = p_i_calc - p_i_manufactured
 
             # Use RMS error over nodes and then over components (to make the largest error have the biggest weight)
-            print(error_matrix)
+            print("error matrix is:", error_matrix)
             error_norm_i = np.sqrt(np.mean(error_matrix ** 2, axis=0))
             error_norm = np.sqrt(np.mean(error_norm_i ** 2))
             error_list.append(error_norm)
 
-        print(error_list)
+        print("error list is:", error_list)
         # Calculate order of accuracy based on convergence and discretization
         order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
         return order_of_accuracy, discretization_list
