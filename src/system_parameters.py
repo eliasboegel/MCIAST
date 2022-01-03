@@ -150,7 +150,7 @@ class SysParams:
         if self.mms is True:
             # If total pressure is constant over xi, set it to 1 and its gradient to 0
             if self.ms_pt_distribution == "constant":
-                self.p_total = 1
+                self.p_total = np.full(self.n_points-1, 1)
                 self.dp_dz = 0
             # If total pressure is not constant over xi, set it and its gradient
             elif self.ms_pt_distribution == "linear":
