@@ -33,15 +33,15 @@ class Solver:
         # print(f"f_matrix: {self.f_matrix}")
         # Calculate the terms in the equation
         ldf = np.multiply(self.params.kl_matrix, q_eq - q_ads)
-        lp = np.multiply(self.params.disp_matrix / (self.params.R * self.params.temp),
+        lp = np.multiply(self.params.disp_matrix,
                          self.params.l_matrix.dot(p_partial))
-        component_sums = np.sum(self.params.void_frac_term * ldf - lp, axis=1)
+        component_sums = np.sum(self.params.R * self.params.temp * self.params.void_frac_term * ldf - lp, axis=1)
         # Add up the terms in the equations for RHS
         if self.params.mms is True:
-            rhs = -self.params.R * self.params.temp * component_sums / self.params.p_total - self.params.b_v_vector + \
+            rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector + \
                   self.MMS.S_nu
         else:
-            rhs = -self.params.R * self.params.temp * component_sums / self.params.p_total - self.params.b_v_vector
+            rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector
         # Create LHS of the equation and solve
         lhs = self.params.g_matrix + self.params.f_matrix
         velocities = sp.linalg.spsolve(lhs, rhs)
@@ -131,6 +131,8 @@ class Solver:
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
+            print("S_pi matrix is:", self.MMS.S_pi)
+            print("S_nu matrix is:", self.MMS.S_nu)
             q_eq = self.MMS.q_eq_matrix
         # Calculate new loadings
         else:
