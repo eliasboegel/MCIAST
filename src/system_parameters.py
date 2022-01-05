@@ -245,9 +245,8 @@ class SysParams:
         # print(f"l_matrix {self.l_matrix.toarray()}")
 
         # Create matrix for material balance equation for storing inlet boundary condition
-        self.d_matrix = np.zeros((self.n_points - 1, self.n_components), dtype="float")
-        first_row = self.p_partial_in * (
-                (self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
+        self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
+        first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
         self.d_matrix[0] = first_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
