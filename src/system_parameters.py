@@ -121,7 +121,7 @@ class SysParams:
         self.n_points = n_points
 
         # Throw an Exception if mole fractions do not equal to 1
-        if np.sum(y_in) != 1:
+        if np.sum(self.y_in) != 1.0:
             raise Exception("Sum of mole fractions is not equal to 1")
         if temp < 0:
             raise Exception("Temperature cannot be below 0")

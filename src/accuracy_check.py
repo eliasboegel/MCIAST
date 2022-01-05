@@ -27,9 +27,9 @@ class OrderOfAccuracy:
         for (dt, nodes) in discretization_list:
             # Set ss_params with tighter discretization for each run
             ss_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
-                                  p_in=2e5, temp=298, c_len=1, u_in=1, void_frac=0.995, y_helium=0.25,
+                                  p_in=1, temp=298, c_len=1, u_in=1, void_frac=0.995, y_helium=0.25,
                                   disp_helium=0.004, kl_helium=1.4, disp=[0.004, 0.004, 0.004], kl=[1.4, 1.4, 1.4],
-                                  rho_p=1000, p_out=1.99e5, time_stepping="BE", dimensionless=True, mms=True,
+                                  rho_p=1000, p_out=0.5, time_stepping="BE", dimensionless=True, mms=True,
                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
             ss_solver = Solver(ss_params)
             error_matrix = None
