@@ -54,11 +54,10 @@ class TestMMS(unittest.TestCase):
 
     def test_dpi_dz_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -70,11 +69,10 @@ class TestMMS(unittest.TestCase):
 
     def test_d2pi_dz2_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -86,11 +84,10 @@ class TestMMS(unittest.TestCase):
 
     def test_nu_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -98,11 +95,10 @@ class TestMMS(unittest.TestCase):
 
     def test_dnu_dz_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -110,11 +106,10 @@ class TestMMS(unittest.TestCase):
 
     def test_dnupi_dz_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -126,11 +121,10 @@ class TestMMS(unittest.TestCase):
 
     def test_S_nu_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
@@ -139,11 +133,10 @@ class TestMMS(unittest.TestCase):
 
     def test_S_pi_calculation(self):
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
-                           p_out=0.5,
-                           temp=288, c_len=1, u_in=1, void_frac=0.1, disp=[0.001, 0.001, 0.001, 0.001], kl=[1, 1, 1, 1],
-                           rho_p=1000, mms=True, ms_pt_distribution="linear", mms_mode="transient",
-                           mms_convergence_factor=1000)
+        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=5, p_in=1.0,
+                           p_out=0.5, y_helium=0.25, disp_helium=0.001, kl_helium=1, temp=288, c_len=1, u_in=1,
+                           void_frac=0.1, disp=[0.001, 0.001, 0.001], kl=[1, 1, 1], rho_p=1000, mms=True,
+                           ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
         mms = MMS(params)
         mms.update_source_functions(100)
 
