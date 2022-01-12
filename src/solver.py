@@ -171,7 +171,11 @@ class Solver:
         # Create initial conditions, partial pressures for helium at the beginning are equal to total pressure
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
         p_partial_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
-        p_partial_initial[:, -1] = self.params.p_total
+        if self.params.mms is False:
+            p_partial_initial[:, -1] = self.params.p_total
+        elif self.params.mms is True:
+            self.MMS.update_source_functions(0)
+            p_partial_initial = self.MMS.pi_matrix
         u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
         print("u_initial is ", u_0)
 

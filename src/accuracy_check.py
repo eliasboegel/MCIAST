@@ -81,5 +81,5 @@ class OrderOfAccuracy:
         return order_of_accuracy, discretization_list
 
 
-ooa = OrderOfAccuracy(which="Space", n=500, dt=0.001, r=2)
+ooa = OrderOfAccuracy(which="Time", n=500, dt=0.0001, r=2)
 print(ooa.analysis()[0])
