@@ -65,16 +65,17 @@ class Solver:
         advection_term = -self.params.g_matrix.dot(m_matrix)
         dispersion_term = np.multiply(self.params.disp_matrix, self.params.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.params.R * self.params.void_frac_term * \
-                          np.multiply(self.params.kl_matrix, q_eq - q_ads) + self.params.d_matrix
+                          np.multiply(self.params.kl_matrix, q_eq - q_ads)
         print("Advection term= :", advection_term)
         print("Dispersion_term= ", dispersion_term)
         print("Adsorpotion term= ", adsorption_term)
+        print("D term= ", self.params.d_matrix)
         # Add up main terms of the equation
         if self.params.mms is True:
-            dp_dt = advection_term + dispersion_term + adsorption_term + self.MMS.S_pi
+            dp_dt = advection_term + dispersion_term + adsorption_term + self.params.d_matrix + self.MMS.S_pi
 
         else:
-            dp_dt = advection_term + dispersion_term + adsorption_term
+            dp_dt = advection_term + dispersion_term + adsorption_term + self.params.d_matrix
 
         return dp_dt
 

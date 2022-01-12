@@ -47,7 +47,7 @@ class OrderOfAccuracy:
                 dp_dt_calc = du_dt_calc[0:nodes - 1]
 
                 # Calculate error matrix
-                error_matrix = dp_dt_calc - dp_dt_manufactured
+                error_matrix = np.abs(dp_dt_calc - dp_dt_manufactured)
 
             elif self.type == "Time":
                 # Create time parameters and solver
@@ -67,17 +67,17 @@ class OrderOfAccuracy:
                 p_i_manufactured = ss_solver.MMS.pi_matrix
 
                 # Calculate error matrix
-                error_matrix = p_i_calc - p_i_manufactured
+                error_matrix = np.abs(p_i_calc - p_i_manufactured)
 
             # Use RMS error over nodes and then over components (to make the largest error have the biggest weight)
             print("error matrix is:", error_matrix)
-            error_norm_i = np.sqrt(np.mean(error_matrix ** 2, axis=0))
-            error_norm = np.sqrt(np.mean(error_norm_i ** 2))
+            # error_norm = np.sqrt(np.mean(error_matrix.flatten() ** 2, axis=0))
+            error_norm = np.amax(error_matrix.flatten())
             error_list.append(error_norm)
 
         print("error list is:", error_list)
         # Calculate order of accuracy based on convergence and discretization
-        order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(2)
+        order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(1/self.r)
         return order_of_accuracy, discretization_list
 
 

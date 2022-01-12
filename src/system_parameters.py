@@ -252,7 +252,7 @@ class SysParams:
 
         # Create matrix for inlet boundary condition for laplacian operator on partial pressures
         self.e_vector = np.zeros(self.n_points - 1)
-        self.e_vector[0] = - np.sum(self.p_partial_in * self.disp)
+        self.e_vector[0] = - np.sum(self.p_partial_in * self.disp) / (self.dz**2)
 
         # Create vector for velocity equation for storing inlet boundary condition
         self.b_v_vector = np.zeros(self.n_points - 1)
