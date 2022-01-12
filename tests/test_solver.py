@@ -94,27 +94,33 @@ class TestSolver(unittest.TestCase):
                                        q_ads)
         np.testing.assert_allclose(dp_dt, np.asarray([[73151.25781719, -73201.64714963, -153600.],
                                                       [62111.25781719, -62150.84916874, 0.],
-                                                      [-120741.66319236, 120710.84916874, 0.]]), 1e-1)
+                                                      [-120741.66319236, 120710.84916874, 0.]]), atol=1e-10)
 
     def test_calculate_velocity(self):
         """
         Case in which kl and disp are identical for each component and equal to 1.
         """
         params = SysParams()
-        params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=4, p_in=5.0, temp=313,
-                           c_len=1, u_in=1, void_frac=0.995, disp=[0, 0], kl=[5, 5], rho_p=2, append_helium=True,
-                           dimensionless=False, p_out=5.0)
+        params.init_params(y_in=[4/7, 2/7], n_points=5, p_in=2, p_out=1, temp=288, c_len=1, u_in=1, void_frac=0.9,
+                           disp=[0.001, 0.002], kl=[0.1, 0.2], rho_p=1000, t_end=40, dt=0.001, y_helium=1/7,
+                           disp_helium=0.003, kl_helium=0.3)
         solver = Solver(params)
 
-        velocities = solver.calculate_velocities(np.asarray([[0.35, 0.65, 1], [0.1, 0.2, 1], [0.1, 0.3, 1]]),
-                                                 np.asarray([[0.02, 0.05, 0], [0.2, 0.2, 0], [0.3, 0.3, 0]]),
-                                                 np.asarray([[0.01, 0.03, 0], [0.05, 0.04, 0], [0.25, 0.25, 0]]))
+        velocities = solver.calculate_velocities(np.asarray([[1.0, 0.5, 0.25],
+                                                             [0.75, 0.5, 0.25],
+                                                             [0.5, 0.5, 0.25],
+                                                             [0.5, 0.25, 0.25]]),
+                                                 np.asarray([[1.0, 0.7, 0.5],
+                                                             [0.8, 0.6, 0.4],
+                                                             [0.6, 0.5, 0.3],
+                                                             [0.4, 0.4, 0.2]]),
+                                                 np.asarray([[0.8, 0.6, 0.4],
+                                                             [0.6, 0.5, 0.3],
+                                                             [0.4, 0.4, 0.1],
+                                                             [0.2, 0.3, 0.0]]))
 
-        # The summed up term can be calculate using Wolfram Alpha with input:
-        # Divide[\(40)1-0.6\(41),0.6]*2* ({{1,2},{3,4},{2,2}}-{{0.5,1.5},{2,3},{1,1}})-Divide[1,8.314*313]
-        # {{-8,4,0},{4,-8,4},{0,8,-8}}{{0.3,0.7},{0.35,0.65},{0.4,0.6}}
-        # Some parts need to be calculated with a separate matrix calculator
-        np.testing.assert_allclose(velocities, np.asarray([-868.178, -1735.6]), rtol=1e-2)
+        np.testing.assert_allclose(velocities, np.asarray([-3490.800394, -6317.344471, -11804.36855, -21681.01349]),
+                                   atol=1e-6)
 
     def test_solve_function(self):
         solver = self.initialize_solver()
