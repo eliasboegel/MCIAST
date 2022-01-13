@@ -44,7 +44,8 @@ class Solver:
             rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector
         # Create LHS of the equation and solve
         lhs = self.params.g_matrix + self.params.f_matrix
-        velocities = sp.linalg.spsolve(lhs, rhs)
+        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points-1), atol=self.params.ls_error,
+                                      maxiter=10*(self.params.n_points-1)**3)[0]
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -66,10 +67,10 @@ class Solver:
         dispersion_term = np.multiply(self.params.disp_matrix, self.params.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.params.R * self.params.void_frac_term * \
                           np.multiply(self.params.kl_matrix, q_eq - q_ads)
-        print("Advection term= :", advection_term)
-        print("Dispersion_term= ", dispersion_term)
-        print("Adsorpotion term= ", adsorption_term)
-        print("D term= ", self.params.d_matrix)
+        # print("Advection term= :", advection_term)
+        # print("Dispersion_term= ", dispersion_term)
+        # print("Adsorpotion term= ", adsorption_term)
+        # print("D term= ", self.params.d_matrix)
         # Add up main terms of the equation
         if self.params.mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.params.d_matrix + self.MMS.S_pi
@@ -109,7 +110,7 @@ class Solver:
             return False
         # Compare the time gradient matrix to zero matrix
         return np.allclose(np.zeros(shape=(2 * self.params.n_points - 2, self.params.n_components)), du_dt,
-                           self.params.ls_error)
+                           atol=self.params.ls_error, rtol=0.0)
 
     def apply_iast(self, partial_pressures):
         equilibrium_loadings = np.zeros(partial_pressures.shape)
@@ -132,8 +133,8 @@ class Solver:
         # Update source functions if MMS is used and get new loadings then
         if self.params.mms is True:
             self.MMS.update_source_functions(time)
-            print("S_pi matrix is:", self.MMS.S_pi)
-            print("S_nu matrix is:", self.MMS.S_nu)
+            # print("S_pi matrix is:", self.MMS.S_pi)
+            # print("S_nu matrix is:", self.MMS.S_nu)
             q_eq = self.MMS.q_eq_matrix
         # Calculate new loadings
         else:
@@ -158,15 +159,15 @@ class Solver:
 
         plotter = Plotter()
 
-        def crank_nicolson(u_new, u_old):
-            return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, t + self.params.dt) +
-                                                   self.calculate_dudt(u_old, t)) - u_new
+        def crank_nicolson(u_new, u_old, time):
+            return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, time + self.params.dt) +
+                                                   self.calculate_dudt(u_old, time)) - u_new
 
-        def forward_euler(u_old):
-            return u_old + self.params.dt * self.calculate_dudt(u_old, t)
+        def forward_euler(u_old, time):
+            return u_old + self.params.dt * self.calculate_dudt(u_old, time)
 
-        def backward_euler(u_new, u_old):
-            return u_old + self.params.dt * self.calculate_dudt(u_new, t + self.params.dt) - u_new
+        def backward_euler(u_new, u_old, time):
+            return u_old + self.params.dt * self.calculate_dudt(u_new, time + self.params.dt) - u_new
 
         # Create initial conditions, partial pressures for helium at the beginning are equal to total pressure
         q_ads_initial = np.zeros((self.params.n_points - 1, self.params.n_components))
@@ -184,17 +185,21 @@ class Solver:
         u_1 = None
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
-            print("Another timestep...")
+            print(f"Another timestep...t={t}")
             # Get the solution
             if self.params.time_stepping == "BE":
-                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0), xin=u_0, f_tol=self.params.ls_error)
+                prediction = forward_euler(u_0, t)
+                u_1 = opt.newton_krylov(lambda u: backward_euler(u, u_0, t), xin=prediction, f_tol=self.params.ls_error,
+                                        maxiter=1000)
             elif self.params.time_stepping == "FE":
-                u_1 = forward_euler(u_0)
+                u_1 = forward_euler(u_0, t)
             elif self.params.time_stepping == "CN":
-                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0), xin=u_0, f_tol=self.params.ls_error)
+                prediction = forward_euler(u_0, t)
+                u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, u_0, t), xin=prediction, f_tol=self.params.ls_error,
+                                        maxiter=1000)
             # Check if solution makes sens
-            if not self.verify_pressures(u_1[0:self.params.n_points - 1]):
-                print("The sum of partial pressures is not equal to 1!")
+            # if not self.verify_pressures(u_1[0:self.params.n_points - 1]):
+            #     print("The sum of partial pressures is not equal to 1!")
 
             if plot:
                 print(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])

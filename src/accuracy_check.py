@@ -26,11 +26,11 @@ class OrderOfAccuracy:
         ss_params = SysParams()
         for (dt, nodes) in discretization_list:
             # Set ss_params with tighter discretization for each run
-            ss_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
+            ss_params.init_params(t_end=0.001, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
                                   p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
                                   disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                                  rho_p=1000, p_out=0.5, time_stepping="BE", dimensionless=True, mms=True,
-                                  ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1000)
+                                  rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
+                                  ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1/100000)
             ss_solver = Solver(ss_params)
             error_matrix = None
             if self.type == "Space":
@@ -52,15 +52,15 @@ class OrderOfAccuracy:
             elif self.type == "Time":
                 # Create time parameters and solver
                 t_params = SysParams()
-                t_params.init_params(t_end=10000, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25, 0.25]), n_points=nodes,
-                                     p_in=2e5, temp=298, c_len=1, u_in=1, void_frac=0.995,
-                                     disp=[0.004, 0.004, 0.004, 0.004], kl=[1.4, 1.4, 1.4, 1.4], rho_p=1000,
-                                     p_out=1.99e5, time_stepping="BE", dimensionless=True, mms=True,
-                                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000)
+                t_params.init_params(t_end=0.001, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
+                                     p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
+                                     disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
+                                     rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
+                                     ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1/100000)
                 t_solver = Solver(t_params)
 
                 # Get the calculated solution
-                p_i_calc = t_solver.solve()
+                p_i_calc = t_solver.solve(plot=False)
 
                 # Get the manufactured solution
                 ss_solver.MMS.update_source_functions(0)
@@ -81,5 +81,5 @@ class OrderOfAccuracy:
         return order_of_accuracy, discretization_list
 
 
-ooa = OrderOfAccuracy(which="Time", n=500, dt=0.0001, r=2)
+ooa = OrderOfAccuracy(which="Time", n=20, dt=0.0000008, r=2)
 print(ooa.analysis()[0])

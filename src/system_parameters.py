@@ -193,7 +193,7 @@ class SysParams:
             self.dis_error = max(self.dz ** 2, self.dt ** 3)
         else:
             raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error / 100
+        self.ls_error = self.dis_error/10
 
         # IAST stuff
         dirpath = os.path.abspath(os.path.dirname(__file__))
