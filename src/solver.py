@@ -1,9 +1,9 @@
-import numpy as np
 import scipy.sparse as sp
 import scipy.optimize as opt
 from src import iast
 from src.mms import MMS
 from src.plotter import *
+from src.system_parameters import SysParams
 
 
 class Solver:
@@ -178,14 +178,14 @@ class Solver:
             self.MMS.update_source_functions(0)
             p_partial_initial = self.MMS.pi_matrix
         u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
-        print("u_initial is ", u_0)
+        #print("u_initial is ", u_0)
 
         t = 0
         du_dt = None
         u_1 = None
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
-            print(f"Another timestep...t={t}")
+            # print(f"Another timestep...t={t}")
             # Get the solution
             if self.params.time_stepping == "BE":
                 prediction = forward_euler(u_0, t)
@@ -202,7 +202,7 @@ class Solver:
             #     print("The sum of partial pressures is not equal to 1!")
 
             if plot:
-                print(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
+                # print(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
                 plotter.plot_loadings(u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
             # Calculate derivative to check convergence
             du_dt = (u_1 - u_0) / self.params.dt
@@ -215,3 +215,12 @@ class Solver:
 
         # Return only partial pressures
         return u_1[0:self.params.n_points - 1]
+
+
+if __name__ == "__main__":
+    params = SysParams()
+    params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=10, p_in=2e5, temp=298,
+                       c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47], rho_p=1000,
+                       p_out=2e5, time_stepping="BE", dimensionless=True, disp_helium=0.004)
+    solver = Solver(params)
+    p_partial_results = solver.solve()
