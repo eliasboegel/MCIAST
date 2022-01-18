@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+import matplotlib, matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -24,8 +24,19 @@ class Plotter:
             if i < (solver.params.component_names.shape[0] - 1): self.ax2.plot([0], self.exit_pressure_history[0,i])
         self.ax1.legend()
 
-        plt.pause(0.01) # Draw and handle input
+        plt.ion()
+        plt.show(block=False)
 
+    def pause(self, interval):
+        backend = plt.rcParams['backend']
+        if backend in matplotlib.rcsetup.interactive_bk:
+            figManager = matplotlib._pylab_helpers.Gcf.get_active()
+            if figManager is not None:
+                canvas = figManager.canvas
+                if canvas.figure.stale:
+                    canvas.draw()
+                canvas.start_event_loop(interval)
+                return
 
     def plot(self, t):
         self.frame += 1
@@ -40,8 +51,6 @@ class Plotter:
         self.ax2.set_xlabel(r"t [s]")
         self.ax2.set_ylabel(r"$\frac{y}{y_0}$ [-]")
 
-        print(self.solver.u_1[self.solver.params.n_points - 2,:-1] / self.solver.params.p_partial_in[:-1])
-
         # Get data
         loadings = self.solver.u_1[self.solver.params.n_points - 1:]
         self.exit_pressure_history[self.frame] = self.solver.u_1[self.solver.params.n_points - 2,:-1] / self.solver.params.p_partial_in[:-1]
@@ -52,4 +61,4 @@ class Plotter:
             if i < (self.solver.params.component_names.shape[0] - 1): self.ax2.plot(np.linspace(0, t, self.frame), self.exit_pressure_history[0:self.frame, i])
         self.ax1.legend()
 
-        plt.pause(0.01)
+        self.pause(0.01)
