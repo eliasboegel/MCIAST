@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import scipy.sparse as sp
-from src import iast
+import iast
 
 
 class SysParams:
@@ -91,7 +91,7 @@ class SysParams:
             # Dimensionless quantities
             self.t_end = t_end * u_in / c_len
             self.dt = dt * u_in / c_len
-            self.nt = self.t_end / self.dt
+            self.nt = int(self.t_end / self.dt)
             self.y_in = np.asarray(y_in)
             self.kl = np.asarray(kl) * c_len / u_in
             self.disp = np.asarray(disp) / (c_len * u_in)
@@ -100,7 +100,7 @@ class SysParams:
             # Quantities with dimensions
             self.t_end = t_end
             self.dt = dt
-            self.nt = self.t_end / self.dt
+            self.nt = int(self.t_end / self.dt)
             self.y_in = np.asarray(y_in)
             self.kl = np.asarray(kl)
             self.disp = np.asarray(disp)
@@ -196,8 +196,13 @@ class SysParams:
         self.ls_error = self.dis_error/10
 
         # IAST stuff
-        dirpath = os.path.abspath(os.path.dirname(__file__))
-        self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+        #dirpath = os.path.abspath(os.path.dirname(__file__))
+        #self.component_names, self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+        self.component_names = np.array(["CO2","N2","He"])
+        self.isotherms = np.array([
+            [1, 3.317e-4],
+            [0.3, 1e-5]
+        ])
 
         # Initialize matrices with parameters set
         self.initialize_matrices()
