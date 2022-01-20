@@ -156,6 +156,11 @@ class Solver:
         return du_dt
 
     def solve(self, plot=True):
+        """
+        Begins the simulation.
+        :param plot: True to turn on the plotting.
+        :return: Matrix with final partial pressures and adsorbed loadings.
+        """
 
         def crank_nicolson(u_new, u_old, time):
             return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, time + self.params.dt) +
@@ -182,7 +187,10 @@ class Solver:
         du_dt = None
         self.u_1 = None
 
-        plotter = Plotter(self)
+        if plot and self.params.mms:
+            plotter = Plotter_mms(self)
+        elif plot:
+            plotter = Plotter(self)
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
             # print(f"Another timestep...t={t}")
@@ -201,7 +209,11 @@ class Solver:
             # if not self.verify_pressures(self.u_1[0:self.params.n_points - 1]):
             #     print("The sum of partial pressures is not equal to 1!")
 
-            if plot: plotter.plot(t)
+            if plot and self.params.mms:
+                plotter.plot_mms(t)
+
+            elif plot:
+                plotter.plot(t)
 
                 #plotter.plot_loadings(self.u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
             # Calculate derivative to check convergence
