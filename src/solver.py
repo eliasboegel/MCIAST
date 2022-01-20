@@ -113,6 +113,11 @@ class Solver:
                            atol=self.params.ls_error, rtol=0.0)
 
     def apply_iast(self, partial_pressures):
+        """
+        Applies the IAST method by calling the respective IAST solving functions.
+        :param partial_pressures: Partial pressures of all the components, excluding the helium.
+        :return: Equilibrium loadings for every component, excluding the helium (for which it is always 0).
+        """
         equilibrium_loadings = np.zeros(partial_pressures.shape)
         zero = np.zeros(self.params.n_components - 1)
         # Apply IAST for each node
@@ -126,6 +131,13 @@ class Solver:
         return equilibrium_loadings
 
     def calculate_dudt(self, u, time):
+        """
+        Calculates the time derivative of the matrix u by calling multiple functions
+        representing different steps of our algorithm.
+        :param u: matrix u which is a concatenation of both the partial pressures and the adsorbed loadings.
+        :param time: current point of time in the simulation, used for plotting.
+        :return: Time derivative of the matrix u.
+        """
         # print("u_old is:", u)
         # Disassemble solution matrix
         p_partial = u[:self.params.n_points - 1]
@@ -157,19 +169,41 @@ class Solver:
 
     def solve(self, plot=True):
         """
-        Begins the simulation.
+        Performs the simulation.
         :param plot: True to turn on the plotting.
         :return: Matrix with final partial pressures and adsorbed loadings.
         """
 
         def crank_nicolson(u_new, u_old, time):
+            """
+                Represents Crank-Nicolson time-stepping method. Used in the non-linear
+                solver to calculate the new u matrix.
+            :param u_new: Approximation of the new matrix u.
+            :param u_old: Old matrix u.
+            :param time: Time in the simulation
+            :return: Left-hand side of the Crank-Nicolson equation with all terms move to the left.
+            """
             return u_old + 0.5 * self.params.dt * (self.calculate_dudt(u_new, time + self.params.dt) +
                                                    self.calculate_dudt(u_old, time)) - u_new
 
         def forward_euler(u_old, time):
+            """
+                Represents FE time-stepping method.
+            :param u_old: Old matrix u.
+            :param time: Time in the simulation.
+            :return: New matrix u.
+            """
             return u_old + self.params.dt * self.calculate_dudt(u_old, time)
 
         def backward_euler(u_new, u_old, time):
+            """
+                Represents Backward-Euler time-stepping method. Used in the non-linear
+                solver to calculate the new u matrix.
+            :param u_new: New matrix u.
+            :param u_old: Old matrix u.
+            :param time: Time in the simulation
+            :return: Left-hand side of the Backward-Euler equation with all terms move to the left.
+            """
             return u_old + self.params.dt * self.calculate_dudt(u_new, time + self.params.dt) - u_new
 
         # Create initial conditions, partial pressures for helium at the beginning are equal to total pressure
@@ -226,7 +260,10 @@ class Solver:
         return self.u_1[0:self.params.n_points - 1]
 
 
-if __name__ == "__main__":
+def run_simulation():
+    """
+    Sets up and runs the simulation.
+    """
     params = SysParams()
     params.init_params(t_end=10, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=20,
                        p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
@@ -236,3 +273,7 @@ if __name__ == "__main__":
     solver = Solver(params)
     p_partial_results = solver.solve()
     input()
+
+
+if __name__ == "__main__":
+    run_simulation()
