@@ -33,6 +33,10 @@ class Plotter:
         plt.show(block=False)
 
     def pause(self, interval):
+        """
+        Pauses the graph for a give interval.
+        :param interval:  The interval to pause for.
+        """
         backend = plt.rcParams['backend']
         if backend in matplotlib.rcsetup.interactive_bk:
             figManager = matplotlib._pylab_helpers.Gcf.get_active()
@@ -44,6 +48,7 @@ class Plotter:
                 return
 
     def plot(self, t):
+        """Plots the graph depicting adsorbed loadings and breakthrough curves"""
         self.frame += 1
 
         # Clear figures

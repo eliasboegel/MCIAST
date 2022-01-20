@@ -44,8 +44,8 @@ class LinearizedSystem:
 
 
 params = SysParams()
-params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=1000, p_in=2.00*1e5,
-                   p_out=2.00*1e5, y_helium=0.25, disp_helium=0.004, kl_helium=1, temp=288, c_len=1, u_in=1,
+params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=1000, p_in=2.00 * 1e5,
+                   p_out=2.00 * 1e5, y_helium=0.25, disp_helium=0.004, kl_helium=1, temp=288, c_len=1, u_in=1,
                    void_frac=0.1, disp=[0.004, 0.004, 0.004], kl=[1, 1, 1], rho_p=1000)
 linsys = LinearizedSystem(params)
 linsys.get_stiffness_estimate()
