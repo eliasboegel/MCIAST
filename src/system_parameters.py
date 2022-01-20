@@ -208,6 +208,9 @@ class SysParams:
         self.initialize_matrices()
 
     def initialize_matrices(self):
+        """
+        Initializes all the constant matrices used in the solver using the already defined system parameters.
+        """
         # Those matrices will be used in the solver, their internal structure is fully explained in the report
 
         # Dimensionless mass transfer coefficients matrix
