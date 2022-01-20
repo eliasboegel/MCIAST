@@ -44,8 +44,8 @@ class Solver:
             rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector
         # Create LHS of the equation and solve
         lhs = self.params.g_matrix + self.params.f_matrix
-        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points-1), atol=self.params.ls_error,
-                                      maxiter=10*(self.params.n_points-1)**3)[0]
+        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points - 1), atol=self.params.ls_error,
+                                      maxiter=10 * (self.params.n_points - 1) ** 3)[0]
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -181,15 +181,13 @@ class Solver:
             self.MMS.update_source_functions(0)
             p_partial_initial = self.MMS.pi_matrix
         self.u_0 = np.concatenate((p_partial_initial, q_ads_initial), axis=0)
-        #print("u_initial is ", self.u_0)
+        # print("u_initial is ", self.u_0)
 
         t = 0
         du_dt = None
         self.u_1 = None
 
-        if plot and self.params.mms:
-            plotter = Plotter_mms(self)
-        elif plot:
+        if plot:
             plotter = Plotter(self)
 
         while (not self.check_steady_state(du_dt)) and t < self.params.t_end:
@@ -197,25 +195,24 @@ class Solver:
             # Get the solution
             if self.params.time_stepping == "BE":
                 prediction = forward_euler(self.u_0, t)
-                self.u_1 = opt.newton_krylov(lambda u: backward_euler(u, self.u_0, t), xin=prediction, f_tol=self.params.ls_error,
-                                        maxiter=1000)
+                self.u_1 = opt.newton_krylov(lambda u: backward_euler(u, self.u_0, t), xin=prediction,
+                                             f_tol=self.params.ls_error,
+                                             maxiter=1000)
             elif self.params.time_stepping == "FE":
                 self.u_1 = forward_euler(self.u_0, t)
             elif self.params.time_stepping == "CN":
                 prediction = forward_euler(self.u_0, t)
-                self.u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, self.u_0, t), xin=prediction, f_tol=self.params.ls_error,
-                                        maxiter=1000)
+                self.u_1 = opt.newton_krylov(lambda u: crank_nicolson(u, self.u_0, t), xin=prediction,
+                                             f_tol=self.params.ls_error,
+                                             maxiter=1000)
             # Check if solution makes sens
             # if not self.verify_pressures(self.u_1[0:self.params.n_points - 1]):
             #     print("The sum of partial pressures is not equal to 1!")
 
-            if plot and self.params.mms:
-                plotter.plot_mms(t)
-
-            elif plot:
+            if plot:
                 plotter.plot(t)
 
-                #plotter.plot_loadings(self.u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
+                # plotter.plot_loadings(self.u_1[self.params.n_points - 1: 2 * self.params.n_points - 2])
             # Calculate derivative to check convergence
             du_dt = (self.u_1 - self.u_0) / self.params.dt
 
@@ -235,7 +232,7 @@ if __name__ == "__main__":
                        p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
                        disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
                        rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
-                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1/1000)
+                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1 / 1000)
     solver = Solver(params)
     p_partial_results = solver.solve()
     input()
