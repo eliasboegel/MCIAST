@@ -121,7 +121,7 @@ class Solver:
             if np.allclose(partial_pressures[i, 0:-1], zero,
                            atol=self.params.ls_error) is False:
                 # Pressure should be passed in bar to IAST
-                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1] / 1e5, self.params.isotherms)
+                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
         # print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
@@ -219,9 +219,11 @@ class Solver:
 
 if __name__ == "__main__":
     params = SysParams()
-    params.init_params(t_end=40, dt=0.001, y_in=np.asarray([0.36, 0.64]), n_points=5, p_in=1e5, temp=313,
-                       c_len=1, u_in=1, void_frac=0.6, disp=[0, 0], kl=[5, 5], rho_p=500,
-                       p_out=1e5, time_stepping="BE", dimensionless=True, disp_helium=0)
+    params.init_params(t_end=10, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=20,
+                       p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
+                       disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
+                       rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
+                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1/1000)
     solver = Solver(params)
     p_partial_results = solver.solve()
     input()

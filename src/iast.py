@@ -53,6 +53,6 @@ def __func(uarr, isotherm_data, calc_cache, pre_calcs):
     calc_cache[-1] = 1 - np.sum(uarr)
 
     # Overwrite vector with all spreading pressure terms
-    calc_cache = isotherm_data[:,0] * np.log1p(pre_calcs / calc_cache) # Removed abs and seems to work as numbers here seem to always be positive
+    calc_cache = isotherm_data[:,0] * np.log1p(np.abs(pre_calcs / calc_cache)) # Removed abs and seems to work as numbers here seem to always be positive
 
     return calc_cache[1:] - calc_cache[:-1] # Return differences between spreading pressures in staggered way
