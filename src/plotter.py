@@ -23,11 +23,24 @@ class Plotter:
                                         :-1] / self.solver.params.p_partial_in[:-1]
         if self.solver.params.mms is True:
             self.exit_pressure_history_ms[0] = self.solver.MMS.pi_matrix[-1, :-1] / self.solver.params.p_partial_in[:-1]
-        for i in range(solver.params.component_names.shape[0]):  # Loop over components
-            self.ax1.plot(np.linspace(0, 1, solver.params.n_points - 1), loadings[:, i],
-                          label=solver.params.component_names[i])
-            if i < (solver.params.component_names.shape[0] - 1): self.ax2.plot([0], self.exit_pressure_history[0, i])
+        for i in range(solver.params.n_components):  # Loop over components
+            if self.solver.params.mms is False:
+                self.ax1.plot(self.solver.params.xi, loadings[:, i], label=solver.params.component_names[i])
+            if self.solver.params.mms is True:
+                self.ax1.plot(self.solver.params.xi, loadings[:, i],
+                              label=f"Calculated MMS loading, component {i}")
+                self.ax1.plot(self.solver.params.xi, self.solver.MMS.q_ads_matrix[:, i],
+                              label=f"Real MMS loading, component {i}")
+            if i < (solver.params.n_components - 1):
+                if self.solver.params.mms is False:
+                    self.ax2.plot([0], self.exit_pressure_history[0, i], label=solver.params.component_names[i])
+                if self.solver.params.mms is True:
+                    self.ax2.plot([0], self.exit_pressure_history[0, i],
+                                  label=f"Calculated MMS partial pressure, component {i}")
+                    self.ax2.plot([0], self.exit_pressure_history_ms[0, i],
+                                  label=f"Real MMS partial pressure, component {i}")
         self.ax1.legend()
+        self.ax2.legend()
 
         plt.ion()
         plt.show(block=False)
@@ -65,14 +78,29 @@ class Plotter:
         loadings = self.solver.u_1[self.solver.params.n_points - 1:]
         self.exit_pressure_history[self.frame] = self.solver.u_1[self.solver.params.n_points - 2,
                                                  :-1] / self.solver.params.p_partial_in[:-1]
+        if self.solver.params.mms is True:
+            self.solver.MMS.update_source_functions(t)
+            self.exit_pressure_history_ms[self.frame] = self.solver.MMS.pi_matrix[-1,
+                                                        :-1] / self.solver.params.p_partial_in[:-1]
 
         # Update plots
-        for i in range(self.solver.params.component_names.shape[0]):  # Components
-            self.ax1.plot(np.linspace(1 / self.solver.params.n_points, 1, self.solver.params.n_points - 1),
-                          loadings[:, i], label=self.solver.params.component_names[i])
-            if i < (self.solver.params.component_names.shape[0] - 1): self.ax2.plot(np.linspace(0, t, self.frame),
-                                                                                    self.exit_pressure_history[
-                                                                                    0:self.frame, i])
+        for i in range(self.solver.params.n_components):  # Components
+            if self.solver.params.mms is False:
+                self.ax1.plot(self.solver.params.xi, loadings[:, i], label=self.solver.params.component_names[i])
+            if self.solver.params.mms is True:
+                self.ax1.plot(self.solver.params.xi, loadings[:, i], label=f"Calculated MMS loading, component {i}")
+                self.ax1.plot(self.solver.params.xi, self.solver.MMS.q_ads_matrix[:, i],
+                              label=f"Real MMS loading, component {i}")
+            if i < (self.solver.params.n_components - 1):
+                if self.solver.params.mms is False:
+                    self.ax2.plot(np.linspace(0, t, self.frame), self.exit_pressure_history[0:self.frame, i],
+                                  label=self.solver.params.component_names[i])
+                if self.solver.params.mms is True:
+                    self.ax2.plot(np.linspace(0, t, self.frame), self.exit_pressure_history[0:self.frame, i],
+                                  label=f"Calculated MMS pressure, component {i}")
+                    self.ax2.plot(np.linspace(0, t, self.frame), self.exit_pressure_history_ms[0:self.frame, i],
+                                  label=f"Real MMS pressure, component {i}")
         self.ax1.legend()
+        self.ax2.legend()
 
-        self.pause(0.01)
+        self.pause(0.000001)

@@ -269,7 +269,7 @@ def run_simulation():
                        p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
                        disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
                        rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
-                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1 / 1000)
+                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1 / 100)
     solver = Solver(params)
     p_partial_results = solver.solve()
     input()
