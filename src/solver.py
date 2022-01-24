@@ -265,11 +265,11 @@ def run_simulation():
     Sets up and runs the simulation.
     """
     params = SysParams()
-    params.init_params(t_end=10, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=20,
-                       p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
-                       disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                       rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
-                       ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1 / 100)
+    params.init_params(t_end=30, dt=0.0001, y_in=np.asarray([0.36, 0.64]), n_points=10,
+                       p_in=1e5, temp=313, c_len=1, u_in=1, void_frac=0.6, y_helium=0.0,
+                       disp_helium=0.04, kl_helium=0, disp=[0.04, 0.04], kl=[5, 5],
+                       rho_p=500, p_out=1e5, time_stepping="FE", dimensionless=True) #, mms=True,
+                       # ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1 / 10)
     solver = Solver(params)
     p_partial_results = solver.solve()
     input()

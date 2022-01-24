@@ -222,12 +222,11 @@ class SysParams:
         # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
-        self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
-            np.full(self.n_points - 2, 1.0), 1)
-        self.g_matrix[-1, -3] = 1.0
-        self.g_matrix[-1, -2] = -4.0
-        self.g_matrix[-1, -1] = 3.0
-        # print("initial g_matrix is", self.g_matrix)
+        self.g_matrix = np.diag(np.full(self.n_points - 1, 3.0), 0) + np.diag(
+            np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
+        self.g_matrix[0, 0] = 0.0
+        self.g_matrix[0, 1] = 1.0
+        print("initial g_matrix is", self.g_matrix)
         self.g_matrix = self.g_matrix / (2.0 * self.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
 
@@ -238,6 +237,7 @@ class SysParams:
         # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         # Laplacian operator matrix
+
         self.l_matrix = np.diag(np.full(self.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1) + np.diag(np.full(self.n_points - 1, -2.0), 0)
         if self.outlet_boundary_type == "Neumann":
@@ -255,7 +255,9 @@ class SysParams:
         # Create matrix for material balance equation for storing inlet boundary condition
         self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
         first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
+        second_row = -self.p_partial_in * (self.v_in / (2 * self.dz))
         self.d_matrix[0] = first_row
+        self.d_matrix[1] = second_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
         # Create matrix for inlet boundary condition for laplacian operator on partial pressures
@@ -266,3 +268,4 @@ class SysParams:
         self.b_v_vector = np.zeros(self.n_points - 1)
         # print(self.b_vector)
         self.b_v_vector[0] = - self.v_in / (2 * self.dz)
+        self.b_v_vector[1] = self.v_in / (2 * self.dz)
