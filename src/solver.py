@@ -146,7 +146,8 @@ class Solver:
         """
         Performs the simulation.
         :return: A time vector of t_samples, a 2D array of p_i_evolution that stores the values of outlet pressures
-        divided by inlet pressures over time, a 3D array of q_ads_evolution that stores q_ads matrices over time
+        divided by inlet pressures over time, a 3D array of q_ads_evolution that stores q_ads matrices over time.
+        The results do not contain the fill gas.
         """
 
         # Run the scipy integrator
@@ -156,16 +157,17 @@ class Solver:
         # Slice and process the results
         t_samples = sol.t
         # Create arrays to store them
-        p_i_evolution = np.zeros((sol.t.shape[0], self.params.n_components))
-        q_ads_evolution = np.zeros((sol.t.shape[0], self.params.n_points-1, self.params.n_components))
+        p_i_evolution = np.zeros((sol.t.shape[0], self.params.n_components-1))
+        q_ads_evolution = np.zeros((sol.t.shape[0], self.params.n_points-1, self.params.n_components-1))
         # Get outlet pressures only. A row of p_i_evolution[t] are outlet pressures at time t.
-        for i in range(0, self.params.n_components):
+        for i in range(0, self.params.n_components-1):
             p_i_evolution[:, i] = sol.y[(i + 1) * (self.params.n_points - 1) - 1]
-        p_i_evolution /= self.params.p_in
+        p_i_evolution /= self.params.p_partial_in[:-1]
         # Get q_ads matrices. q_ads_evolution[t] is q_ads matrix at time t.
         for i in range(0, t_samples.shape[0]):
-            q_ads_evolution[i] = np.reshape(sol.y[self.params.n_components * (self.params.n_points - 1):, i],
-                                            (self.params.n_points - 1, self.params.n_components), "F")
+            q_ads_evolution[i] = np.reshape(sol.y[self.params.n_components * (self.params.n_points - 1):
+                                                  -(self.params.n_points - 1), i], (self.params.n_points - 1,
+                                                                                    self.params.n_components-1), "F")
         return t_samples, p_i_evolution, q_ads_evolution
 
 
@@ -174,7 +176,7 @@ def run_simulation():
     Sets up and runs the simulation and plots the results.
     """
     params = SysParams()
-    params.init_params(t_end=5, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
+    params.init_params(t_end=1, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
                        p_in=1e5, temp=313, c_len=1, u_in=1, void_frac=0.6, y_fill_gas=0.0,
                        disp_fill_gas=0.04, kl_fill_gas=0, disp=[0.04, 0.04], kl=[5, 5],
                        rho_p=500, p_out=1e5, time_stepping_method="RK45", dimensionless=True)

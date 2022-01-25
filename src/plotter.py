@@ -35,7 +35,7 @@ class Plotter:
 
         # If MMS is used, create am array to store time evolution of ideal solution for comparison with calculated one
         if self.params.use_mms is True:
-            exit_pressure_history_ms = np.zeros((t_samples.shape[0], self.params.n_components))
+            exit_pressure_history_ms = np.zeros((t_samples.shape[0], self.params.n_components-1))
         for frame in range(0, t_samples.shape[0]):
             # Get data up to current frame
             t = t_samples[0:frame+1]
@@ -43,7 +43,7 @@ class Plotter:
             exit_pressure_history = p_i_evolution[0:frame+1]
             if self.params.use_mms is True:
                 self.params.MMS.update_source_functions(frame)
-                exit_pressure_history_ms[frame] = self.params.MMS.pi_matrix[-1] / self.params.p_partial_in
+                exit_pressure_history_ms[frame] = self.params.MMS.pi_matrix[-1, :-1] / self.params.p_partial_in[:-1]
             # Clear figures
             self.ax1.clear()
             self.ax2.clear()
@@ -55,7 +55,7 @@ class Plotter:
             self.ax2.set_ylabel(r"$\frac{y}{y_0}$ [-]")
 
             # Plot the result for each component
-            for i in range(self.params.n_components):
+            for i in range(self.params.n_components-1):
                 if self.params.use_mms is False:
                     self.ax1.plot(self.params.xi, loadings[:, i], label=self.params.component_names[i])
                     self.ax2.plot(t, exit_pressure_history[0:frame+1, i], label=self.params.component_names[i])
