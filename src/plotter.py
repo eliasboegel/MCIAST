@@ -28,12 +28,16 @@ class Plotter:
         :param p_i_evolution: Values of partial pressures at sampled times
         :param q_ads_evolution: Values of adsorbed loadings at sampled times
         """
+
+        # Create figure and axes. ax1 shows loading over the domain at current frame.
+        # ax2 shows the evolution from 0 up to current frame of outlet pressure except of fill gas
         self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2)
 
+        # If MMS is used, create am array to store time evolution of ideal solution for comparison with calculated one
         if self.params.use_mms is True:
             exit_pressure_history_ms = np.zeros((t_samples.shape[0], self.params.n_components))
         for frame in range(0, t_samples.shape[0]):
-            # Get data
+            # Get data up to current frame
             t = t_samples[0:frame+1]
             loadings = q_ads_evolution[frame]
             exit_pressure_history = p_i_evolution[0:frame+1]
@@ -50,10 +54,12 @@ class Plotter:
             self.ax2.set_xlabel(r"t [s]")
             self.ax2.set_ylabel(r"$\frac{y}{y_0}$ [-]")
 
-            for i in range(self.params.n_components):  # Components
+            # Plot the result for each component
+            for i in range(self.params.n_components):
                 if self.params.use_mms is False:
                     self.ax1.plot(self.params.xi, loadings[:, i], label=self.params.component_names[i])
                     self.ax2.plot(t, exit_pressure_history[0:frame+1, i], label=self.params.component_names[i])
+                # If MMS is used plot ideal results as well for comparison
                 if self.params.use_mms is True:
                     self.ax1.plot(self.params.xi, loadings[:, i], label=f"Calculated MMS loading, component {i}")
                     self.ax1.plot(self.params.xi, self.params.MMS.q_ads_matrix[:, i],

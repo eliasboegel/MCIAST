@@ -40,7 +40,7 @@ class Solver:
             rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector
         # Create LHS of the equation and solve
         lhs = self.params.g_matrix + self.params.f_matrix
-        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points - 1), atol=self.params.atol)[0]
+        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points - 1), atol=1e-16)[0]
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -96,7 +96,7 @@ class Solver:
         for i in range(partial_pressures.shape[0]):
             # But only if partial pressures of components other than helium is not 0 (helium us last column)
             if np.allclose(partial_pressures[i, 0:-1], zero,
-                           atol=1e-32, rtol=0) is False:
+                           atol=1e-16, rtol=0) is False:
                 # Pressure should be passed in bar to IAST
                 equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
         # print(f"Equilibrium loadings: {equilibrium_loadings}")
@@ -111,7 +111,8 @@ class Solver:
         :return: Time derivative of the matrix u.
         """
         # print("u_old is:", u)
-        # Disassemble solution matrix
+        # Disassemble solution vector - first half of the vector is flattened partial pressures matrix, second is
+        # flattened adsorbed loadings matrix
         p_partial = np.reshape(u[:self.params.n_components*(self.params.n_points - 1)],
                                (self.params.n_points - 1, self.params.n_components), "F")
         q_ads = np.reshape(u[self.params.n_components*(self.params.n_points - 1):],
@@ -135,7 +136,7 @@ class Solver:
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
         # print("dp_dt matrix is:", dp_dt)
-        # Assemble and return solution gradient matrix
+        # Assemble and return solution gradient 1D vector
         du_dt = np.concatenate((dp_dt.flatten("F"), dq_ads_dt.flatten("F")), axis=0)
         # print("du_dt matrix is:", du_dt)
         # print("Another internal iteration...")
@@ -144,20 +145,24 @@ class Solver:
     def solve(self):
         """
         Performs the simulation.
-        :return: Matrix with final partial pressures and adsorbed loadings.
+        :return: A time vector of t_samples, a 2D array of p_i_evolution that stores the values of outlet pressures
+        divided by inlet pressures over time, a 3D array of q_ads_evolution that stores q_ads matrices over time
         """
 
         # Run the scipy integrator
         sol = integrate.solve_ivp(fun=self.calculate_dudt, y0=self.params.u_0, t_span=(0.0, self.params.t_end),
                                   method=self.params.time_stepping_scheme, t_eval=self.params.t_samples,
-                                  atol=self.params.atol, vectorized=False)
-        # Slice the results
+                                  atol=self.params.atol, rtol=1e-16, vectorized=False)
+        # Slice and process the results
         t_samples = sol.t
+        # Create arrays to store them
         p_i_evolution = np.zeros((sol.t.shape[0], self.params.n_components))
         q_ads_evolution = np.zeros((sol.t.shape[0], self.params.n_points-1, self.params.n_components))
+        # Get outlet pressures only. A row of p_i_evolution[t] are outlet pressures at time t.
         for i in range(0, self.params.n_components):
             p_i_evolution[:, i] = sol.y[(i + 1) * (self.params.n_points - 1) - 1]
         p_i_evolution /= self.params.p_in
+        # Get q_ads matrices. q_ads_evolution[t] is q_ads matrix at time t.
         for i in range(0, t_samples.shape[0]):
             q_ads_evolution[i] = np.reshape(sol.y[self.params.n_components * (self.params.n_points - 1):, i],
                                             (self.params.n_points - 1, self.params.n_components), "F")
@@ -166,13 +171,13 @@ class Solver:
 
 def run_simulation():
     """
-    Sets up and runs the simulation.
+    Sets up and runs the simulation and plots the results.
     """
     params = SysParams()
     params.init_params(t_end=5, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
                        p_in=1e5, temp=313, c_len=1, u_in=1, void_frac=0.6, y_fill_gas=0.0,
                        disp_fill_gas=0.04, kl_fill_gas=0, disp=[0.04, 0.04], kl=[5, 5],
-                       rho_p=500, p_out=1e5, time_stepping_method="BDF", dimensionless=True)
+                       rho_p=500, p_out=1e5, time_stepping_method="RK45", dimensionless=True)
     solver = Solver(params)
     t, p_i_evolution, q_ads_evolution = solver.solve()
     # print("time vector is:", t)
