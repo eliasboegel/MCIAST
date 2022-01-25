@@ -1,5 +1,5 @@
 import os
-
+from src.mms import MMS
 import numpy as np
 import scipy.sparse as sp
 import iast
@@ -7,6 +7,7 @@ import iast
 
 class SysParams:
     def __init__(self):
+        self.u_0 = 0
         self.t_end = 0
         self.dt = 0
         self.nt = 0
@@ -26,17 +27,18 @@ class SysParams:
         self.n_components = 0
         self.p_total = 0
         self.p_partial_in = 0
-        self.mms = 0
+        self.use_mms = 0
         self.mms_mode = 0
         self.mms_conv_factor = 0
         self.ms_pt_distribution = 0
         self.outlet_boundary_type = 0
         self.void_frac_term = 0
-        self.dis_error = 0
-        self.ls_error = 0
-        self.time_stepping = 0
+        self.atol = 0
+        self.time_stepping_scheme = 0
         self.isotherms = 0
         self.R = 0
+        self.t_samples = 0
+        self.MMS = 0
         # Initializing matrices
         self.kl_matrix = 0
         self.disp_matrix = 0
@@ -49,9 +51,8 @@ class SysParams:
         self.xi = 0
 
     def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
-                    t_end=40, dt=0.001, y_helium=0, disp_helium=0, kl_helium=0, time_stepping="BE", dimensionless=True,
-                    mms=False,
-                    ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
+                    t_end, dt, y_fill_gas, disp_fill_gas, kl_fill_gas, time_stepping_method, atol, dimensionless=True,
+                    mms=False, ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -61,11 +62,12 @@ class SysParams:
         Therefore, the number of components is always len(y_in)+1.
 
 
+        :param atol: Absolute error for linear solvers and time stepping schemes
         :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
         :param dimensionless: Boolean that specifies whether dimensionless numbers are used.
-        :param time_stepping: String that specifies the time of stepping methods.
+        :param time_stepping_method: String that specifies the time of stepping methods.
         :param y_in: Array containing mole fractions at the start.
         :param n_points: Number of grid points.
         :param p_in: Total pressure at the inlet.
@@ -76,9 +78,9 @@ class SysParams:
         :param disp: Array containing dispersion coefficient for every component.
         :param kl: Array containing effective mass transport coefficient of every component.
         :param rho_p: Density of the adsorbent.
-        :param kl_helium: mass transfer coefficient of helium, should be 0 by default
-        :param disp_helium: dispersion coefficient of helium
-        :param y_helium: mole fraction of helium at the inlet, should be 0 by default
+        :param kl_fill_gas: mass transfer coefficient of helium, should be 0 by default
+        :param disp_fill_gas: dispersion coefficient of helium
+        :param y_fill_gas: mole fraction of helium at the inlet, should be 0 by default
         :param mms: Choose if dynamic code testing is switched on.
         :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
         :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
@@ -106,13 +108,13 @@ class SysParams:
             self.disp = np.asarray(disp)
 
         # Appending the parameters of helium to the component arrays
-        self.kl = np.append(self.kl, kl_helium)
-        self.y_in = np.append(self.y_in, y_helium)
-        self.disp = np.append(self.disp, disp_helium)
+        self.kl = np.append(self.kl, kl_fill_gas)
+        self.y_in = np.append(self.y_in, y_fill_gas)
+        self.disp = np.append(self.disp, disp_fill_gas)
 
         # The number of components assessed based on the length of y_in array (so that it includes helium)
         self.n_components = self.y_in.shape[0]
-        if self.mms is True and (self.n_components % 2) != 0:
+        if self.use_mms is True and (self.n_components % 2) != 0:
             raise Warning("Number of components for MMS must be even ")
 
         # Specify inlet and outlet pressures and number of points
@@ -143,20 +145,20 @@ class SysParams:
         self.v_in = 1
 
         # Parameters for running dynamic code verification using MMS
-        self.mms = mms
-        if self.mms is True:
+        self.use_mms = mms
+        if self.use_mms is True:
             self.mms_mode = mms_mode
             self.mms_conv_factor = mms_convergence_factor
             self.ms_pt_distribution = ms_pt_distribution
             if dimensionless is False:
                 raise Warning("mms must be initialized with dimensionless set to True")
-        if type(self.mms) != bool:
+        if type(self.use_mms) != bool:
             raise Warning("mms must be either True or False")
 
         # Create array holding nodes coordinates (without node 0)
         self.xi = np.linspace(0, self.c_len, self.n_points)[1:]
         # Set total pressures and its gradient for MMS
-        if self.mms is True:
+        if self.use_mms is True:
             # If total pressure is constant over xi, set it to 1 and its gradient to 0
             if self.ms_pt_distribution == "constant":
                 self.p_total = np.full(self.n_points-1, 1)
@@ -178,22 +180,17 @@ class SysParams:
             self.dp_dz = (p_out - p_in) / self.c_len
 
         # Parameters for outlet boundary condition
-        if self.p_in == self.p_out or (self.ms_pt_distribution == "constant" and self.mms is True):
+        if self.p_in == self.p_out or (self.ms_pt_distribution == "constant" and self.use_mms is True):
             self.outlet_boundary_type = "Neumann"
-        elif self.p_in != self.p_out or (self.ms_pt_distribution == "linear" and self.mms is True):
+        elif self.p_in != self.p_out or (self.ms_pt_distribution == "linear" and self.use_mms is True):
             self.outlet_boundary_type = "Numerical"
         elif self.outlet_boundary_type != "Neumann" and self.outlet_boundary_type != "Numerical":
             raise Warning("Outlet boundary condition needs to be either Neumann or Numerical")
 
         # Determine the magnitude of error to be set for convergence and for linear solver
-        self.time_stepping = time_stepping
-        if self.time_stepping == "BE" or self.time_stepping == "FE":
-            self.dis_error = max(self.dz ** 2, self.dt ** 2)
-        elif self.time_stepping == "CN":
-            self.dis_error = max(self.dz ** 2, self.dt ** 3)
-        else:
-            raise Warning("Only FE, BE, CN methods can be used!")
-        self.ls_error = self.dis_error/10
+        self.time_stepping_scheme = time_stepping_method
+        self.atol = atol
+        self.t_samples = np.arange(0.0, self.t_end + self.dt, self.dt)
 
         # IAST stuff
         #dirpath = os.path.abspath(os.path.dirname(__file__))
@@ -206,6 +203,20 @@ class SysParams:
 
         # Initialize matrices with parameters set
         self.initialize_matrices()
+
+        # Initialize MMS
+        if self.use_mms is True:
+            self.MMS = MMS(self)
+
+        # Create initial conditions, partial pressures for helium at the beginning are equal to total pressure
+        q_ads_initial = np.zeros((self.n_points - 1, self.n_components))
+        p_partial_initial = np.zeros((self.n_points - 1, self.n_components))
+        if self.use_mms is False:
+            p_partial_initial[:, -1] = self.p_total
+        elif self.use_mms is True:
+            self.MMS.update_source_functions(0)
+            p_partial_initial = self.MMS.pi_matrix
+        self.u_0 = np.concatenate((p_partial_initial.flatten("F"), q_ads_initial.flatten("F")), axis=0)
 
     def initialize_matrices(self):
         """
@@ -222,11 +233,12 @@ class SysParams:
         # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
-        self.g_matrix = np.diag(np.full(self.n_points - 1, 3.0), 0) + np.diag(
-            np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
-        self.g_matrix[0, 0] = 0.0
-        self.g_matrix[0, 1] = 1.0
-        print("initial g_matrix is", self.g_matrix)
+        self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
+            np.full(self.n_points - 2, 1.0), 1)
+        self.g_matrix[-1, -3] = 1.0
+        self.g_matrix[-1, -2] = -4.0
+        self.g_matrix[-1, -1] = 3.0
+        # print("initial g_matrix is", self.g_matrix)
         self.g_matrix = self.g_matrix / (2.0 * self.dz)
         self.g_matrix = sp.csr_matrix(self.g_matrix)
 
@@ -237,7 +249,6 @@ class SysParams:
         # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         # Laplacian operator matrix
-
         self.l_matrix = np.diag(np.full(self.n_points - 2, 1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1) + np.diag(np.full(self.n_points - 1, -2.0), 0)
         if self.outlet_boundary_type == "Neumann":
@@ -255,9 +266,7 @@ class SysParams:
         # Create matrix for material balance equation for storing inlet boundary condition
         self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
         first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
-        second_row = -self.p_partial_in * (self.v_in / (2 * self.dz))
         self.d_matrix[0] = first_row
-        self.d_matrix[1] = second_row
         # self.d_matrix = sp.csr_matrix(self.d_matrix)
 
         # Create matrix for inlet boundary condition for laplacian operator on partial pressures
@@ -268,4 +277,3 @@ class SysParams:
         self.b_v_vector = np.zeros(self.n_points - 1)
         # print(self.b_vector)
         self.b_v_vector[0] = - self.v_in / (2 * self.dz)
-        self.b_v_vector[1] = self.v_in / (2 * self.dz)

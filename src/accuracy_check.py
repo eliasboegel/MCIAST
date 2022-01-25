@@ -27,9 +27,9 @@ class OrderOfAccuracy:
         for (dt, nodes) in discretization_list:
             # Set ss_params with tighter discretization for each run
             ss_params.init_params(t_end=0.001, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
-                                  p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
-                                  disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                                  rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
+                                  p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
+                                  disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
+                                  rho_p=1000, p_out=0.5, time_stepping_method="CN", dimensionless=True, mms=True,
                                   ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1/100000)
             ss_solver = Solver(ss_params)
             error_matrix = None
@@ -53,9 +53,9 @@ class OrderOfAccuracy:
                 # Create time parameters and solver
                 t_params = SysParams()
                 t_params.init_params(t_end=0.001, dt=dt, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
-                                     p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_helium=0.25,
-                                     disp_helium=1, kl_helium=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                                     rho_p=1000, p_out=0.5, time_stepping="CN", dimensionless=True, mms=True,
+                                     p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
+                                     disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
+                                     rho_p=1000, p_out=0.5, time_stepping_method="CN", dimensionless=True, mms=True,
                                      ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1/100000)
                 t_solver = Solver(t_params)
 

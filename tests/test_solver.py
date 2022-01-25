@@ -13,7 +13,7 @@ class TestSolver(unittest.TestCase):
         params = SysParams()
         params.init_params(t_end=10000, dt=0.001, y_in=np.asarray([0.5, 0.5]), n_points=n_points, p_in=2e5, temp=298,
                            c_len=1, u_in=1, void_frac=0.995, disp=[0.004, 0.004], kl=[4.35, 1.47], rho_p=1000,
-                           p_out=2e5, time_stepping="BE", dimensionless=True, disp_helium=0.004)
+                           p_out=2e5, time_stepping_method="BE", dimensionless=True, disp_fill_gas=0.004)
         solver = Solver(params)
         return solver
 
@@ -44,7 +44,7 @@ class TestSolver(unittest.TestCase):
         params = SysParams()
         params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.2, 0.8]), n_points=4, p_in=5.0, temp=313,
                            c_len=1, u_in=1, void_frac=0.6, disp=[1, 1], kl=[1, 1], rho_p=2,
-                           dimensionless=True, p_out=5.0, disp_helium=1)
+                           dimensionless=True, p_out=5.0, disp_fill_gas=1)
         solver = Solver(params)
         print("Matrix G: ", solver.params.g_matrix)
         print("Matrix L: ", solver.params.l_matrix)
@@ -102,8 +102,8 @@ class TestSolver(unittest.TestCase):
         """
         params = SysParams()
         params.init_params(y_in=[4/7, 2/7], n_points=5, p_in=2, p_out=1, temp=288, c_len=1, u_in=1, void_frac=0.9,
-                           disp=[0.001, 0.002], kl=[0.1, 0.2], rho_p=1000, t_end=40, dt=0.001, y_helium=1/7,
-                           disp_helium=0.003, kl_helium=0.3)
+                           disp=[0.001, 0.002], kl=[0.1, 0.2], rho_p=1000, t_end=40, dt=0.001, y_fill_gas=1 / 7,
+                           disp_fill_gas=0.003, kl_fill_gas=0.3)
         solver = Solver(params)
 
         velocities = solver.calculate_velocities(np.asarray([[1.0, 0.5, 0.25],
