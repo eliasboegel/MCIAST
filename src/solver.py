@@ -153,7 +153,7 @@ class Solver:
         # Run the scipy integrator
         sol = integrate.solve_ivp(fun=self.calculate_dudt, y0=self.params.u_0, t_span=(0.0, self.params.t_end),
                                   method=self.params.time_stepping_scheme, t_eval=self.params.t_samples,
-                                  atol=self.params.atol, rtol=1e-16, vectorized=False)
+                                  atol=self.params.atol, rtol=1e-13, vectorized=False)
         # Slice and process the results
         t_samples = sol.t
         # Create arrays to store them
@@ -176,7 +176,7 @@ def run_simulation():
     Sets up and runs the simulation and plots the results.
     """
     params = SysParams()
-    params.init_params(t_end=1, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
+    params.init_params(t_end=2, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
                        p_in=1e5, temp=313, c_len=1, u_in=1, void_frac=0.6, y_fill_gas=0.0,
                        disp_fill_gas=0.04, kl_fill_gas=0, disp=[0.04, 0.04], kl=[5, 5],
                        rho_p=500, p_out=1e5, time_stepping_method="RK45", dimensionless=True)

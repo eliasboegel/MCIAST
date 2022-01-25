@@ -71,7 +71,7 @@ class Plotter:
 
             self.ax1.legend()
             self.ax2.legend()
-            self.pause(0.001)
+            self.pause(0.01)
             plt.ion()
             plt.show()
 
