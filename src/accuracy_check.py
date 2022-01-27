@@ -19,31 +19,31 @@ class OrderOfAccuracy:
         # (we want to check convergence termination as well, hence we do not take simply manufactured solution at
         # termination time in the second case)
         ss_params = SysParams()
-        for (dt, nodes) in discretization_list:
+        for nodes in discretization_list:
             # Set ss_params with tighter discretization for each run
             ss_params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
                                   p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
                                   disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
                                   rho_p=1000, p_out=0.5, time_stepping_method="RK23", dimensionless=True, mms=True,
-                                  ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1/10,
-                                  atol=1e-6)
+                                  ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1/1000,
+                                  atol=1e-15)
             ss_solver = Solver(ss_params)
             error_matrix = None
 
             # Get dp_dt matrix of manufactured solution (all elements should be zero as it is steady state)
-            ss_solver.MMS.update_source_functions(0)
-            dp_dt_manufactured = ss_solver.MMS.dpi_dt_matrix
+            ss_params.MMS.update_source_functions(0)
+            dp_dt_manufactured = ss_params.MMS.dpi_dt_matrix
             # Get manufactured solution for adsorbed loading and partial pressures
-            q_ads = ss_solver.MMS.q_ads_matrix
-            p_partial = ss_solver.MMS.pi_matrix
-            u = np.concatenate((p_partial, q_ads), axis=0)
+            q_ads = ss_params.MMS.q_ads_matrix
+            p_partial = ss_params.MMS.pi_matrix
+            u = np.concatenate((p_partial.flatten("F"), q_ads.flatten("F")), axis=0)
             # Calculate spatial gradient of these quantities (proper discretization should return zero because
             # of steady state)
-            du_dt_calc = ss_solver.calculate_dudt(u, 0)
-            dp_dt_calc = du_dt_calc[0:nodes - 1]
+            du_dt_calc = ss_solver.calculate_dudt(0, u)
+            dp_dt_calc = du_dt_calc[0:ss_params.n_components * (nodes - 1)]
 
             # Calculate error matrix
-            error_matrix = np.abs(dp_dt_calc - dp_dt_manufactured)
+            error_matrix = np.abs(dp_dt_calc - dp_dt_manufactured.flatten("F"))
 
             # Find the biggest error
             print("error matrix is:", error_matrix)
@@ -54,4 +54,9 @@ class OrderOfAccuracy:
         print("error list is:", error_list)
         # Calculate order of accuracy based on convergence and discretization
         order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(1/self.r)
-        return order_of_accuracy, discretization_list
+        return order_of_accuracy, discretization_list, error_list
+
+
+ooa = OrderOfAccuracy(100, 2)
+ooa, dis_list, error_list = ooa.analysis()
+print(ooa)
