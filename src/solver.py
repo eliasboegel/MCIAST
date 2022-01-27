@@ -41,7 +41,8 @@ class Solver:
             rhs = -(component_sums + self.params.e_vector) / self.params.p_total - self.params.b_v_vector
         # Create LHS of the equation and solve
         lhs = self.params.g_matrix + self.params.f_matrix
-        velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points - 1), atol=1e-16)[0]
+        #velocities = sp.linalg.lgmres(A=lhs, b=rhs, x0=np.ones(self.params.n_points - 1), atol=1e-16, outer_k=3)[0]
+        velocities = sp.linalg.spsolve(A=lhs, b=rhs)
         return velocities
 
     def calculate_dp_dt(self, velocities, p_partial, q_eq, q_ads):
@@ -114,9 +115,9 @@ class Solver:
         # print("u_old is:", u)
         # Disassemble solution vector - first half of the vector is flattened partial pressures matrix, second is
         # flattened adsorbed loadings matrix
-        p_partial = np.reshape(u[:self.params.n_components*(self.params.n_points - 1)],
+        p_partial = np.reshape(u[:self.params.n_components * (self.params.n_points - 1)],
                                (self.params.n_points - 1, self.params.n_components), "F")
-        q_ads = np.reshape(u[self.params.n_components*(self.params.n_points - 1):],
+        q_ads = np.reshape(u[self.params.n_components * (self.params.n_points - 1):],
                            (self.params.n_points - 1, self.params.n_components), "F")
         # Update source functions if MMS is used and get new loadings then
         if self.params.use_mms is True:
@@ -152,14 +153,16 @@ class Solver:
         """
 
         some_data = pd.read_csv("test_data/n2.csv", skiprows=1)
-        co2_isotherm = pyiast.ModelIsotherm(some_data,loading_key="Loading(mmol/g)",pressure_key="P(bar)",model="Langmuir")
-        n2_isotherm = pyiast.ModelIsotherm(some_data,loading_key="Loading(mmol/g)",pressure_key="P(bar)",model="Langmuir")
+        co2_isotherm = pyiast.ModelIsotherm(some_data, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
+                                            model="Langmuir")
+        n2_isotherm = pyiast.ModelIsotherm(some_data, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
+                                           model="Langmuir")
         co2_isotherm.params["M"] = 1
         co2_isotherm.params["K"] = 3.317e-4
         n2_isotherm.params["M"] = 0.3
         n2_isotherm.params["K"] = 1e-5
         self.params.isotherms = [co2_isotherm, n2_isotherm]
-        
+
         # Run the scipy integrator
         sol = integrate.solve_ivp(fun=self.calculate_dudt, y0=self.params.u_0, t_span=(0.0, self.params.t_end),
                                   method=self.params.time_stepping_scheme, t_eval=self.params.t_samples,
@@ -167,17 +170,17 @@ class Solver:
         # Slice and process the results
         t_samples = sol.t
         # Create arrays to store them
-        p_i_evolution = np.zeros((sol.t.shape[0], self.params.n_components-1))
-        q_ads_evolution = np.zeros((sol.t.shape[0], self.params.n_points-1, self.params.n_components-1))
+        p_i_evolution = np.zeros((sol.t.shape[0], self.params.n_components - 1))
+        q_ads_evolution = np.zeros((sol.t.shape[0], self.params.n_points - 1, self.params.n_components - 1))
         # Get outlet pressures only. A row of p_i_evolution[t] are outlet pressures at time t.
-        for i in range(0, self.params.n_components-1):
+        for i in range(0, self.params.n_components - 1):
             p_i_evolution[:, i] = sol.y[(i + 1) * (self.params.n_points - 1) - 1]
         p_i_evolution /= self.params.p_partial_in[:-1]
         # Get q_ads matrices. q_ads_evolution[t] is q_ads matrix at time t.
         for i in range(0, t_samples.shape[0]):
             q_ads_evolution[i] = np.reshape(sol.y[self.params.n_components * (self.params.n_points - 1):
                                                   -(self.params.n_points - 1), i], (self.params.n_points - 1,
-                                                                                    self.params.n_components-1), "F")
+                                                                                    self.params.n_components - 1), "F")
         return t_samples, p_i_evolution, q_ads_evolution
 
 
@@ -186,10 +189,11 @@ def run_simulation():
     Sets up and runs the simulation and plots the results.
     """
     params = SysParams()
-    params.init_params(t_end=2, atol=1e-6, dt=0.1, y_in=np.asarray([0.36, 0.64]), n_points=5,
-                       p_in=1e5, temp=313, c_len=1, u_in=1, void_frac=0.6, y_fill_gas=0.0,
-                       disp_fill_gas=0.04, kl_fill_gas=0, disp=[0.04, 0.04], kl=[5, 5],
-                       rho_p=500, p_out=1e5, time_stepping_method="RK45", dimensionless=True)
+    params.init_params(t_end=20, dt=0.01, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=10,
+                       p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
+                       disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
+                       rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=True,
+                       mms_mode="transient", mms_convergence_factor=5, atol=1e-6)
     solver = Solver(params)
     t, p_i_evolution, q_ads_evolution = solver.solve()
     # print("time vector is:", t)
