@@ -50,9 +50,9 @@ class SysParams:
         self.e_vector = 0
         self.xi = 0
 
-    def init_params(self, y_in, n_points, p_in, p_out, temp, c_len, u_in, void_frac, disp, kl, rho_p,
+    def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     t_end, dt, y_fill_gas, disp_fill_gas, kl_fill_gas, time_stepping_method, atol, dimensionless=True,
-                    mms=False, ms_pt_distribution="linear", mms_mode="transient", mms_convergence_factor=1000):
+                    mms=False, mms_mode="transient", mms_convergence_factor=1000):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -63,7 +63,6 @@ class SysParams:
 
 
         :param atol: Absolute error for linear solvers and time stepping schemes
-        :param p_out: Total pressure at the outlet.
         :param t_end: Final time point.
         :param dt: Length of one time step.
         :param dimensionless: Boolean that specifies whether dimensionless numbers are used.
@@ -82,10 +81,12 @@ class SysParams:
         :param disp_fill_gas: dispersion coefficient of helium
         :param y_fill_gas: mole fraction of helium at the inlet, should be 0 by default
         :param mms: Choose if dynamic code testing is switched on.
-        :param ms_pt_distribution: Choose total pressure distribution for dynamic code testing.
         :param mms_mode: Choose if MMS is to be used to steady state or transient simulation.
         :param mms_convergence_factor: Choose how quickly MMS is supposed to reach steady state.
         """
+
+        p_out = p_in  # This could be changed to user input if discretization and vectorization is ever fixed.
+        ms_pt_distribution = "constant"  # Same as above
 
         self.R = 8.314
 
