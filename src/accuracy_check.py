@@ -12,7 +12,7 @@ class OrderOfAccuracy:
 
     def analysis(self):
         # Create a list of discretizations that will be used to estimate convergence.
-        discretization_list = [self.n, self.r * self.n, self.r**2 * self.n]
+        discretization_list = [self.n, self.r * self.n]
         # Create a list to store errors between calculated and manufactured solutions for discretizations above
         error_list = []
         # Create params class that will store steady state (final solution). It is used for both space and time OoA
@@ -24,9 +24,8 @@ class OrderOfAccuracy:
             ss_params.init_params(t_end=10, dt=0.1, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=nodes,
                                   p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
                                   disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                                  rho_p=1000, p_out=0.5, time_stepping_method="RK23", dimensionless=True, mms=True,
-                                  ms_pt_distribution="linear", mms_mode="steady", mms_convergence_factor=1/1000,
-                                  atol=1e-15)
+                                  rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=True,
+                                  mms_mode="steady", mms_convergence_factor=1/1000, atol=1e-15)
             ss_solver = Solver(ss_params)
             error_matrix = None
 
@@ -53,7 +52,7 @@ class OrderOfAccuracy:
 
         print("error list is:", error_list)
         # Calculate order of accuracy based on convergence and discretization
-        order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(1/self.r)
+        order_of_accuracy = np.log((error_list[0]) / (error_list[1])) / np.log(self.r)
         return order_of_accuracy, discretization_list, error_list
 
 
