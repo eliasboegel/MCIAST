@@ -17,7 +17,7 @@ class LinearizedSystem:
         a_matrix = self.get_lin_sys_matrix(disp_magnitude)
         lambda_max = sp.linalg.eigs(a_matrix, k=1, which="LM", return_eigenvectors=False, maxiter=100000, tol=1e-15)[0]
         lambda_min = sp.linalg.eigs(a_matrix, k=1, which="SM", return_eigenvectors=False, maxiter=100000, tol=1e-15)[0]
-        stiffness = np.absolute(lambda_max / lambda_min)
+        stiffness = np.absolute(lambda_max) / np.absolute(lambda_min)
         print(f"Stiffness of linearized system matrix for is {stiffness}")
 
     def get_estimated_dt(self):
@@ -39,14 +39,15 @@ class LinearizedSystem:
 
         for (f_name, f) in (("RK4", rk4_stability_equation), ("BE", be_stability_equation),
                             ("FE", fe_stability_equation)):
-            dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(2.0), maxfev=10000)[0]
+            dt = opt.fsolve(func=stability_condition, args=f, x0=np.array(1), maxfev=10000)[0]
             print(f"Estimated timestep for stability for {f_name} is {dt} seconds")
 
 
 params = SysParams()
 params.init_params(t_end=8, dt=0.001, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=1000, p_in=2.00 * 1e5,
-                   p_out=2.00 * 1e5, y_fill_gas=0.25, disp_fill_gas=0.004, kl_fill_gas=1, temp=288, c_len=1, u_in=1,
-                   void_frac=0.1, disp=[0.004, 0.004, 0.004], kl=[1, 1, 1], rho_p=1000)
+                   p_out=2.00 * 1e5, y_fill_gas=0.25, disp_fill_gas=0.04, kl_fill_gas=1, temp=288, c_len=1, u_in=1,
+                   void_frac=0.1, disp=[0.04, 0.04, 0.04], kl=[1, 1, 1], rho_p=1000, time_stepping_method="RK45",
+                   atol=1e-6)
 linsys = LinearizedSystem(params)
 linsys.get_stiffness_estimate()
 linsys.get_estimated_dt()

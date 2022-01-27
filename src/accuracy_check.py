@@ -60,26 +60,22 @@ class OrderOfAccuracy:
                 t_solver = Solver(t_params)
 
                 # Get the calculated solution
-                p_i_calc = t_solver.solve(plot=False)
+                t_calc, p_i_calc, q_ads_calc = t_solver.solve()
 
                 # Get the manufactured solution
                 ss_solver.MMS.update_source_functions(0)
                 p_i_manufactured = ss_solver.MMS.pi_matrix
 
                 # Calculate error matrix
-                error_matrix = np.abs(p_i_calc - p_i_manufactured)
+                error_matrix = np.abs(p_i_calc[-1] - p_i_manufactured[-1])
 
             # Use RMS error over nodes and then over components (to make the largest error have the biggest weight)
             print("error matrix is:", error_matrix)
             # error_norm = np.sqrt(np.mean(error_matrix.flatten() ** 2, axis=0))
-            error_norm = np.amax(error_matrix.flatten())
+            error_norm = np.amax(error_matrix)
             error_list.append(error_norm)
 
         print("error list is:", error_list)
         # Calculate order of accuracy based on convergence and discretization
         order_of_accuracy = np.log((error_list[2] - error_list[1]) / (error_list[1] - error_list[0])) / np.log(1/self.r)
         return order_of_accuracy, discretization_list
-
-
-ooa = OrderOfAccuracy(which="Time", n=20, dt=0.0000008, r=2)
-print(ooa.analysis()[0])
