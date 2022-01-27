@@ -3,6 +3,7 @@ import scipy.integrate as integrate
 import iast
 from plotter import *
 from system_parameters import SysParams
+import pyiast, pandas as pd
 
 
 class Solver:
@@ -150,6 +151,15 @@ class Solver:
         The results do not contain the fill gas.
         """
 
+        some_data = pd.read_csv("test_data/n2.csv", skiprows=1)
+        co2_isotherm = pyiast.ModelIsotherm(some_data,loading_key="Loading(mmol/g)",pressure_key="P(bar)",model="Langmuir")
+        n2_isotherm = pyiast.ModelIsotherm(some_data,loading_key="Loading(mmol/g)",pressure_key="P(bar)",model="Langmuir")
+        co2_isotherm.params["M"] = 1
+        co2_isotherm.params["K"] = 3.317e-4
+        n2_isotherm.params["M"] = 0.3
+        n2_isotherm.params["K"] = 1e-5
+        self.params.isotherms = [co2_isotherm, n2_isotherm]
+        
         # Run the scipy integrator
         sol = integrate.solve_ivp(fun=self.calculate_dudt, y0=self.params.u_0, t_span=(0.0, self.params.t_end),
                                   method=self.params.time_stepping_scheme, t_eval=self.params.t_samples,

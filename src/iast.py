@@ -1,6 +1,7 @@
 import scipy as sp
 import numpy as np
 
+
 np.set_printoptions(edgeitems=30, linewidth=1000)
 
 
@@ -29,6 +30,15 @@ def fit(data_list, skipheader=0, skipfooter=0):
 
 
 def solve(partial_pressures, isotherm_data):
+    #pyIAST start
+    loadings = np.empty(partial_pressures.shape[0], dtype=np.double)
+
+    for i in range(partial_pressures.shape[0]):
+        loadings[i] = params.isotherms[i].loading(partial_pressures[i])
+
+    return loadings
+    #pyIAST end
+    
     # Allocate memory for calculation caches once and pass as parameter to avoid constant allocation/deallocation on every call of __func
     func_cache = np.empty(partial_pressures.shape[0], dtype=np.double)
 
