@@ -217,6 +217,15 @@ class SysParams:
             self.MMS.update_source_functions(0)
             p_partial_initial = self.MMS.pi_matrix
         self.u_0 = np.concatenate((p_partial_initial.flatten("F"), q_ads_initial.flatten("F")), axis=0)
+        
+        # IAST stuff
+        #dirpath = os.path.abspath(os.path.dirname(__file__))
+        #self.component_names, self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+        self.component_names = np.array(["CO2","N2","He"])
+        self.isotherms = np.array([
+            [1, 3.317e-4],#CO2
+            [0.3, 1e-5]#N2
+        ])
 
     def initialize_matrices(self):
         """
