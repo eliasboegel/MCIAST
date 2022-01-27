@@ -99,7 +99,7 @@ class Solver:
             if np.allclose(partial_pressures[i, 0:-1], zero,
                            atol=1e-16, rtol=0) is False:
                 # Pressure should be passed in bar to IAST
-                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params.isotherms)
+                equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params)
         # print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
