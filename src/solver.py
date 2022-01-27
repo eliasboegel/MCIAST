@@ -3,6 +3,7 @@ import scipy.integrate as integrate
 import iast
 from plotter import *
 from system_parameters import SysParams
+import pyiast, pandas as pd
 
 
 class Solver:
