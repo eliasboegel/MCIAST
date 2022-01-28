@@ -152,7 +152,7 @@ class Solver:
         The results do not contain the fill gas.
         """
 
-        some_data = pd.read_csv("test_data/n2.csv", skiprows=1)
+        some_data = pd.read_csv(r"test_data/n2.csv", skiprows=1)
         co2_isotherm = pyiast.ModelIsotherm(some_data, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
                                             model="Langmuir")
         n2_isotherm = pyiast.ModelIsotherm(some_data, loading_key="Loading(mmol/g)", pressure_key="P(bar)",
@@ -189,11 +189,14 @@ def run_simulation():
     Sets up and runs the simulation and plots the results.
     """
     params = SysParams()
-    params.init_params(t_end=20, dt=0.01, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=10,
+    """params.init_params(t_end=30, dt=0.01, y_in=np.asarray([0.25, 0.25, 0.25]), n_points=10,
                        p_in=1, temp=298, c_len=1, u_in=1, void_frac=1, y_fill_gas=0.25,
                        disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
-                       rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=True,
-                       mms_mode="transient", mms_convergence_factor=5, atol=1e-6)
+                       rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=False,
+                       mms_mode="transient", mms_convergence_factor=5, atol=1e-6)"""
+    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=10, p_in=1e5, temp=313,
+                       c_len=1, u_in=1, void_frac=0.6, disp=[0.04, 0.04], kl=[5, 5], rho_p=500,
+                       time_stepping_method="RK45", dimensionless=True, disp_fill_gas=0.04, y_fill_gas=0, kl_fill_gas=0, atol=1e-6)
     solver = Solver(params)
     t, p_i_evolution, q_ads_evolution = solver.solve()
     # print("time vector is:", t)

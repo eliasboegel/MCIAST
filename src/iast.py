@@ -27,12 +27,12 @@ def fit(data_list, skipheader=0, skipfooter=0):
 
 def solve(partial_pressures, params):
     # PYIAST VERSION
-    """loadings = np.empty(partial_pressures.shape[0], dtype=np.double)
+    loadings = np.empty(partial_pressures.shape[0], dtype=np.double)
 
     for i in range(partial_pressures.shape[0]):
         loadings[i] = params.isotherms[i].loading(partial_pressures[i])
 
-    return loadings"""
+    return loadings
 
     # MCIAST VERSION
     

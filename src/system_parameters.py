@@ -1,5 +1,5 @@
 import os
-from src.mms import MMS
+from mms import MMS
 import numpy as np
 import scipy.sparse as sp
 import iast
