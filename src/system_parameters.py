@@ -7,6 +7,7 @@ import iast
 
 class SysParams:
     def __init__(self):
+        self.spatial_discretization_method = 0
         self.u_0 = 0
         self.t_end = 0
         self.dt = 0
@@ -52,7 +53,8 @@ class SysParams:
 
     def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     t_end, dt, y_fill_gas, disp_fill_gas, kl_fill_gas, time_stepping_method, atol, dimensionless=True,
-                    mms=False, mms_mode="transient", mms_convergence_factor=1000, spatial_discretization_method="central"):
+                    mms=False, mms_mode="transient", mms_convergence_factor=1000,
+                    spatial_discretization_method="central"):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -62,6 +64,7 @@ class SysParams:
         Therefore, the number of components is always len(y_in)+1.
 
 
+        :param spatial_discretization_method: Sets whether to use upwind or central method
         :param atol: Absolute error for linear solvers and time stepping schemes
         :param t_end: Final time point.
         :param dt: Length of one time step.
@@ -125,6 +128,8 @@ class SysParams:
 
         # Save chosen discretization method
         self.spatial_discretization_method = spatial_discretization_method
+        if self.spatial_discretization_method != "upwind" and self.spatial_discretization_method != "central":
+            raise Warning("spatial_discretization_method must be either upwind or central")
 
         # Throw an Exception if mole fractions do not equal to 1
         if np.sum(self.y_in) != 1.0:
@@ -165,7 +170,7 @@ class SysParams:
         if self.use_mms is True:
             # If total pressure is constant over xi, set it to 1 and its gradient to 0
             if self.ms_pt_distribution == "constant":
-                self.p_total = np.full(self.n_points-1, 1)
+                self.p_total = np.full(self.n_points - 1, 1)
                 self.dp_dz = 0
             # If total pressure is not constant over xi, set it and its gradient
             elif self.ms_pt_distribution == "linear":
@@ -196,15 +201,6 @@ class SysParams:
         self.atol = atol
         self.t_samples = np.arange(0.0, self.t_end + self.dt, self.dt)
 
-        # IAST stuff
-        #dirpath = os.path.abspath(os.path.dirname(__file__))
-        #self.component_names, self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
-        self.component_names = np.array(["CO2","N2","He"])
-        self.isotherms = np.array([
-            [1, 3.317e-4],
-            [0.3, 1e-5]
-        ])
-
         # Initialize matrices with parameters set
         self.initialize_matrices()
 
@@ -221,14 +217,14 @@ class SysParams:
             self.MMS.update_source_functions(0)
             p_partial_initial = self.MMS.pi_matrix
         self.u_0 = np.concatenate((p_partial_initial.flatten("F"), q_ads_initial.flatten("F")), axis=0)
-        
+
         # IAST stuff
-        #dirpath = os.path.abspath(os.path.dirname(__file__))
-        #self.component_names, self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
-        self.component_names = np.array(["CO2","N2","He"])
+        # dirpath = os.path.abspath(os.path.dirname(__file__))
+        # self.component_names, self.isotherms = iast.fit([dirpath + "/test_data/n2.csv", dirpath + "/test_data/co2.csv"])
+        self.component_names = np.array(["CO2", "N2", "He"])
         self.isotherms = np.array([
-            [1, 3.317e-4],#CO2
-            [0.3, 1e-5]#N2
+            [1, 3.317e-4],  # CO2
+            [0.3, 1e-5]  # N2
         ])
 
     def initialize_matrices(self):
@@ -246,15 +242,16 @@ class SysParams:
         # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
-        if (self.spatial_discretization_method == "upwind"):
+        if self.spatial_discretization_method == "upwind":
             self.g_matrix = np.diag(np.full(self.n_points - 1, 3.0), 0) + np.diag(
-            np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
+                np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
             self.g_matrix[0, 0] = 0.0
             self.g_matrix[0, 1] = 1.0
-            #print("initial g_matrix is", self.g_matrix)
+            # print("initial g_matrix is", self.g_matrix)
             self.g_matrix = self.g_matrix / (2.0 * self.dz)
             self.g_matrix = sp.csr_matrix(self.g_matrix)
 
+            # Create matrices and vectors with boundary terms
             self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
             first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
             second_row = -self.p_partial_in * (self.v_in / (2 * self.dz))
@@ -266,9 +263,9 @@ class SysParams:
             self.b_v_vector[0] = - self.v_in / (2 * self.dz)
             self.b_v_vector[1] = self.v_in / (2 * self.dz)
 
-        elif (self.spatial_discretization_method == "central"):
+        elif self.spatial_discretization_method == "central":
             self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
-            np.full(self.n_points - 2, 1.0), 1)
+                np.full(self.n_points - 2, 1.0), 1)
             self.g_matrix[-1, -3] = 1.0
             self.g_matrix[-1, -2] = -4.0
             self.g_matrix[-1, -1] = 3.0
@@ -276,6 +273,7 @@ class SysParams:
             self.g_matrix = sp.csr_matrix(self.g_matrix)
             # print("initial g_matrix is", self.g_matrix)
 
+            # Create matrices and vectors with boundary terms
             self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
             first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
             self.d_matrix[0] = first_row
@@ -283,9 +281,6 @@ class SysParams:
             self.b_v_vector = np.zeros(self.n_points - 1)
             # print(self.b_vector)
             self.b_v_vector[0] = - self.v_in / (2 * self.dz)
-
-
-
 
         # F matrix for calculating velocity
         self.f_matrix = np.diag(self.dp_dz / self.p_total)
@@ -308,17 +303,6 @@ class SysParams:
         self.l_matrix = sp.csr_matrix(self.l_matrix)
         # print(f"l_matrix {self.l_matrix.toarray()}")
 
-        # Create matrix for material balance equation for storing inlet boundary condition
-        self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
-        first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
-        self.d_matrix[0] = first_row
-        # self.d_matrix = sp.csr_matrix(self.d_matrix)
-
         # Create matrix for inlet boundary condition for laplacian operator on partial pressures
         self.e_vector = np.zeros(self.n_points - 1)
-        self.e_vector[0] = - np.sum(self.p_partial_in * self.disp) / (self.dz**2)
-
-        # Create vector for velocity equation for storing inlet boundary condition
-        self.b_v_vector = np.zeros(self.n_points - 1)
-        # print(self.b_vector)
-        self.b_v_vector[0] = - self.v_in / (2 * self.dz)
+        self.e_vector[0] = - np.sum(self.p_partial_in * self.disp) / (self.dz ** 2)
