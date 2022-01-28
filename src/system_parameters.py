@@ -52,7 +52,7 @@ class SysParams:
 
     def init_params(self, y_in, n_points, p_in, temp, c_len, u_in, void_frac, disp, kl, rho_p,
                     t_end, dt, y_fill_gas, disp_fill_gas, kl_fill_gas, time_stepping_method, atol, dimensionless=True,
-                    mms=False, mms_mode="transient", mms_convergence_factor=1000):
+                    mms=False, mms_mode="transient", mms_convergence_factor=1000, spatial_discretization_method="central"):
 
         """
         Initializes the solver with the parameters that remain constant throughout the calculations
@@ -122,6 +122,9 @@ class SysParams:
         self.p_in = p_in
         self.p_out = p_out
         self.n_points = n_points
+
+        # Save chosen discretization method
+        self.spatial_discretization_method = spatial_discretization_method
 
         # Throw an Exception if mole fractions do not equal to 1
         if np.sum(self.y_in) != 1.0:
@@ -243,14 +246,46 @@ class SysParams:
         # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
-        self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
+        if (self.spatial_discretization_method == "upwind"):
+            self.g_matrix = np.diag(np.full(self.n_points - 1, 3.0), 0) + np.diag(
+            np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
+            self.g_matrix[0, 0] = 0.0
+            self.g_matrix[0, 1] = 1.0
+            #print("initial g_matrix is", self.g_matrix)
+            self.g_matrix = self.g_matrix / (2.0 * self.dz)
+            self.g_matrix = sp.csr_matrix(self.g_matrix)
+
+            self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
+            first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
+            second_row = -self.p_partial_in * (self.v_in / (2 * self.dz))
+            self.d_matrix[0] = first_row
+            self.d_matrix[1] = second_row
+
+            self.b_v_vector = np.zeros(self.n_points - 1)
+            # print(self.b_vector)
+            self.b_v_vector[0] = - self.v_in / (2 * self.dz)
+            self.b_v_vector[1] = self.v_in / (2 * self.dz)
+
+        elif (self.spatial_discretization_method == "central"):
+            self.g_matrix = np.diag(np.full(self.n_points - 2, -1.0), -1) + np.diag(
             np.full(self.n_points - 2, 1.0), 1)
-        self.g_matrix[-1, -3] = 1.0
-        self.g_matrix[-1, -2] = -4.0
-        self.g_matrix[-1, -1] = 3.0
-        # print("initial g_matrix is", self.g_matrix)
-        self.g_matrix = self.g_matrix / (2.0 * self.dz)
-        self.g_matrix = sp.csr_matrix(self.g_matrix)
+            self.g_matrix[-1, -3] = 1.0
+            self.g_matrix[-1, -2] = -4.0
+            self.g_matrix[-1, -1] = 3.0
+            self.g_matrix = self.g_matrix / (2.0 * self.dz)
+            self.g_matrix = sp.csr_matrix(self.g_matrix)
+            # print("initial g_matrix is", self.g_matrix)
+
+            self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
+            first_row = self.p_partial_in * ((self.v_in / (2 * self.dz)) + (self.disp / (self.dz ** 2)))
+            self.d_matrix[0] = first_row
+
+            self.b_v_vector = np.zeros(self.n_points - 1)
+            # print(self.b_vector)
+            self.b_v_vector[0] = - self.v_in / (2 * self.dz)
+
+
+
 
         # F matrix for calculating velocity
         self.f_matrix = np.diag(self.dp_dz / self.p_total)
