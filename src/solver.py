@@ -93,13 +93,9 @@ class Solver:
         :return: Equilibrium loadings for every component, excluding the helium (for which it is always 0).
         """
         equilibrium_loadings = np.zeros(partial_pressures.shape)
-        zero = np.zeros(self.params.n_components - 1)
         # Apply IAST for each node
         for i in range(partial_pressures.shape[0]):
-            # But only if partial pressures of components other than helium is not 0 (helium us last column)
-            if np.allclose(partial_pressures[i, 0:-1], zero,
-                           atol=1e-16, rtol=0) is False:
-                # Pressure should be passed in bar to IAST
+                # Pass pressure to IAST
                 equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params)
         # print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
@@ -194,7 +190,7 @@ def run_simulation():
                        disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
                        rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=False,
                        mms_mode="transient", mms_convergence_factor=5, atol=1e-6)"""
-    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=10, p_in=1e5, temp=313,
+    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=1000, p_in=1e5, temp=313,
                        c_len=1, u_in=1, void_frac=0.6, disp=[0.004, 0.004], kl=[5, 5], rho_p=500,
                        time_stepping_method="RK45", dimensionless=True, disp_fill_gas=0.004, y_fill_gas=0, kl_fill_gas=0, atol=1e-3,
                        spatial_discretization_method="upwind")
