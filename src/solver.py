@@ -190,16 +190,18 @@ def run_simulation():
                        disp_fill_gas=1, kl_fill_gas=1, disp=[1, 1, 1], kl=[1, 1, 1],
                        rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=False,
                        mms_mode="transient", mms_convergence_factor=5, atol=1e-6)"""
-    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=1000, p_in=1e5, temp=313,
+    # Initialize the system parameters
+    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=10, p_in=1e5, temp=313,
                        c_len=1, u_in=1, void_frac=0.6, disp=[0.004, 0.004], kl=[5, 5], rho_p=500,
                        time_stepping_method="RK45", dimensionless=True, disp_fill_gas=0.004, y_fill_gas=0, kl_fill_gas=0, atol=1e-3,
                        spatial_discretization_method="upwind")
+    # Create the solver object
     solver = Solver(params)
+    # Run the simulation
     t, p_i_evolution, q_ads_evolution = solver.solve()
-    # print("time vector is:", t)
-    # print("partial pressure evolution is:", p_i_evolution)
-    # print("q_ads evolution is:", q_ads_evolution)
+    # Create the plotter
     plotter = Plotter(params)
+    # Use the plotter to plot the breakthrough curve and the evolution of partial pressures inside of the column
     plotter.plot(t, p_i_evolution, q_ads_evolution)
     input()
 
