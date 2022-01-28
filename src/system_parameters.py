@@ -199,7 +199,7 @@ class SysParams:
         # Determine the magnitude of error to be set for convergence and for linear solver
         self.time_stepping_scheme = time_stepping_method
         self.atol = atol
-        self.t_samples = np.arange(0.0, self.t_end + self.dt, self.dt)
+        self.t_samples = np.arange(0.0, self.t_end, self.dt)
 
         # Initialize matrices with parameters set
         self.initialize_matrices()
