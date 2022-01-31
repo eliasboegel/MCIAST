@@ -25,9 +25,6 @@ class Solver:
 
         :return: Array containing velocities at each grid point.
         """
-        # print(f"b_Vector: {self.b_vector}")
-        # print(f"g_matrix {self.g_matrix}")
-        # print(f"f_matrix: {self.f_matrix}")
         # Calculate the terms in the equation
         ldf = np.multiply(self.params.kl_matrix, q_eq - q_ads)
         lp = np.multiply(self.params.disp_matrix,
@@ -64,10 +61,6 @@ class Solver:
         dispersion_term = np.multiply(self.params.disp_matrix, self.params.l_matrix.dot(p_partial))
         adsorption_term = -self.params.temp * self.params.R * self.params.void_frac_term * \
                           np.multiply(self.params.kl_matrix, q_eq - q_ads)
-        # print("Advection term= :", advection_term)
-        # print("Dispersion_term= ", dispersion_term)
-        # print("Adsorpotion term= ", adsorption_term)
-        # print("D term= ", self.params.d_matrix)
         # Add up main terms of the equation
         if self.params.use_mms is True:
             dp_dt = advection_term + dispersion_term + adsorption_term + self.params.d_matrix + self.params.MMS.S_pi
@@ -97,7 +90,6 @@ class Solver:
         for i in range(partial_pressures.shape[0]):
                 # Pass pressure to IAST
                 equilibrium_loadings[i, 0:-1] = iast.solve(partial_pressures[i, 0:-1], self.params)
-        # print(f"Equilibrium loadings: {equilibrium_loadings}")
         return equilibrium_loadings
 
     def calculate_dudt(self, t, u):
@@ -108,7 +100,6 @@ class Solver:
         :param t: current point of time in the simulation, used for plotting.
         :return: Time derivative of the matrix u.
         """
-        # print("u_old is:", u)
         # Disassemble solution vector - first half of the vector is flattened partial pressures matrix, second is
         # flattened adsorbed loadings matrix
         p_partial = np.reshape(u[:self.params.n_components * (self.params.n_points - 1)],
@@ -118,26 +109,18 @@ class Solver:
         # Update source functions if MMS is used and get new loadings then
         if self.params.use_mms is True:
             self.params.MMS.update_source_functions(t)
-            # print("S_pi matrix is:", self.MMS.S_pi)
-            # print("S_nu matrix is:", self.MMS.S_nu)
             q_eq = self.params.MMS.q_eq_matrix
         # Calculate new loadings
         else:
             q_eq = self.apply_iast(p_partial)  # Call the IAST
         # Calculate loading derivative
-        # print("q_eq matrix is:", q_eq)
         dq_ads_dt = self.calculate_dq_ads_dt(q_eq, q_ads)
-        # print("dq_ads_dt matrix is:", dq_ads_dt)
         # Calculate new velocity
         v = self.calculate_velocities(p_partial, q_eq, q_ads)
-        # print("v vector is:", v)
         # Calculate new partial pressures derivative
         dp_dt = self.calculate_dp_dt(v, p_partial, q_eq, q_ads)
-        # print("dp_dt matrix is:", dp_dt)
         # Assemble and return solution gradient 1D vector
         du_dt = np.concatenate((dp_dt.flatten("F"), dq_ads_dt.flatten("F")), axis=0)
-        # print("du_dt matrix is:", du_dt)
-        # print("Another internal iteration...")
         return du_dt
 
     def solve(self):
@@ -191,10 +174,9 @@ def run_simulation():
                        rho_p=1000, time_stepping_method="RK23", dimensionless=True, mms=False,
                        mms_mode="transient", mms_convergence_factor=5, atol=1e-6)"""
     # Initialize the system parameters
-    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=10, p_in=1e5, temp=313,
+    params.init_params(t_end=25, dt=1e-1, y_in=np.asarray([0.36, 0.64]), n_points=100, p_in=1e5, temp=313,
                        c_len=1, u_in=1, void_frac=0.6, disp=[0.004, 0.004], kl=[5, 5], rho_p=500,
-                       time_stepping_method="RK45", dimensionless=True, disp_fill_gas=0.004, y_fill_gas=0, kl_fill_gas=0, atol=1e-3,
-                       spatial_discretization_method="upwind")
+                       time_stepping_method="RK45", dimensionless=True, disp_fill_gas=0.004, y_fill_gas=0, kl_fill_gas=0, atol=1e-3)
     # Create the solver object
     solver = Solver(params)
     # Run the simulation

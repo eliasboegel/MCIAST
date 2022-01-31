@@ -1,6 +1,5 @@
 import scipy as sp
 import numpy as np
-import pyiast
 np.set_printoptions(edgeitems=30, linewidth=1000)
 
 def fit(data_list, skipheader=0, skipfooter=0):
@@ -51,10 +50,6 @@ def solve(partial_pressures, params):
     uarr[:] = subsol
     uarr[-1] = 1 - np.sum(subsol)
 
-    #one_over_sc_loadings = (uarr + pre_calc_kpress) / pre_calc_kmpress
-    #tot_loading = 1 / np.dot(uarr, one_over_sc_loadings) # 1 / sum(uarr / sc_loadings)
-
-    #sc_loadings = pre_calc_kmpress / (1 + pre_calc_kpress)
     sc_loadings = params.isotherms[:,0] * params.isotherms[:,1] * partial_pressures / (1 + params.isotherms[:,1] * partial_pressures)
 
     inv_loading = np.sum(uarr / sc_loadings)
