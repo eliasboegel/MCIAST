@@ -235,11 +235,9 @@ class SysParams:
 
         # Dimensionless mass transfer coefficients matrix
         self.kl_matrix = np.broadcast_to(self.kl, (self.n_points - 1, self.n_components))
-        # print("kl_matrix is", self.kl_matrix)
 
         # Dimensionless dispersion coefficients matrix
         self.disp_matrix = np.broadcast_to(self.disp, (self.n_points - 1, self.n_components))
-        # print("disp_matrix is", self.disp_matrix)
 
         # Gradient matrix
         if self.spatial_discretization_method == "upwind":
@@ -247,7 +245,6 @@ class SysParams:
                 np.full(self.n_points - 2, -4.0), -1) + np.diag(np.full(self.n_points - 3, 1.0), -2)
             self.g_matrix[0, 0] = 0.0
             self.g_matrix[0, 1] = 1.0
-            # print("initial g_matrix is", self.g_matrix)
             self.g_matrix = self.g_matrix / (2.0 * self.dz)
             self.g_matrix = sp.csr_matrix(self.g_matrix)
 
@@ -259,7 +256,6 @@ class SysParams:
             self.d_matrix[1] = second_row
 
             self.b_v_vector = np.zeros(self.n_points - 1)
-            # print(self.b_vector)
             self.b_v_vector[0] = - self.v_in / (2 * self.dz)
             self.b_v_vector[1] = self.v_in / (2 * self.dz)
 
@@ -271,7 +267,6 @@ class SysParams:
             self.g_matrix[-1, -1] = 3.0
             self.g_matrix = self.g_matrix / (2.0 * self.dz)
             self.g_matrix = sp.csr_matrix(self.g_matrix)
-            # print("initial g_matrix is", self.g_matrix)
 
             # Create matrices and vectors with boundary terms
             self.d_matrix = np.zeros((self.n_points - 1, self.n_components))
@@ -279,14 +274,11 @@ class SysParams:
             self.d_matrix[0] = first_row
 
             self.b_v_vector = np.zeros(self.n_points - 1)
-            # print(self.b_vector)
             self.b_v_vector[0] = - self.v_in / (2 * self.dz)
 
         # F matrix for calculating velocity
         self.f_matrix = np.diag(self.dp_dz / self.p_total)
-        # # print(f"f_matrix: {self.f_matrix}")
         self.f_matrix = sp.csr_matrix(self.f_matrix)
-        # # print(f"f_matrix: {self.f_matrix.toarray()}")
 
         # Laplacian operator matrix
         self.l_matrix = np.diag(np.full(self.n_points - 2, 1.0), -1) + np.diag(
@@ -298,10 +290,8 @@ class SysParams:
             self.l_matrix[-1, -3] = 4.0
             self.l_matrix[-1, -2] = -5.0
             self.l_matrix[-1, -1] = 2.0
-        # print("initial l_matrix is", self.l_matrix)
         self.l_matrix /= self.dz ** 2
         self.l_matrix = sp.csr_matrix(self.l_matrix)
-        # print(f"l_matrix {self.l_matrix.toarray()}")
 
         # Create matrix for inlet boundary condition for laplacian operator on partial pressures
         self.e_vector = np.zeros(self.n_points - 1)
